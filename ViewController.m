@@ -158,32 +158,33 @@
 }
 
 - (NSString *)preparePatchOutputDirectory {
-    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *outputDir = [docsDir stringByAppendingPathComponent:@"sparkle_patch"];
-    
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    BOOL isDir = NO;
-    BOOL exists = [fileManager fileExistsAtPath:outputDir isDirectory:&isDir];
-    
-    if (exists && !isDir) {
-        // 如果存在但是是普通文件，先删除
-        NSError *removeError = nil;
-        [fileManager removeItemAtPath:outputDir error:&removeError];
-        if (removeError) {
-            NSLog(@"❌ 删除冲突文件失败: %@", removeError);
-            return nil;
-        }
-    }
-    
-    // 不存在或者删除成功后，确保目录存在
-    NSError *error = nil;
-    if (![fileManager createDirectoryAtPath:outputDir
-                withIntermediateDirectories:YES
-                                 attributes:nil
-                                      error:&error]) {
-        NSLog(@"❌ 创建目录失败: %@", error);
-        return nil;
-    }
+//    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+//    NSString *outputDir = [docsDir stringByAppendingPathComponent:@"sparkle_patch"];
+    NSString *outputDir = [@"~/Documents/sparkle_patch" stringByExpandingTildeInPath];
+
+//    NSFileManager *fileManager = [NSFileManager defaultManager];
+//    BOOL isDir = NO;
+//    BOOL exists = [fileManager fileExistsAtPath:outputDir isDirectory:&isDir];
+//    
+//    if (exists && !isDir) {
+//        // 如果存在但是是普通文件，先删除
+//        NSError *removeError = nil;
+//        [fileManager removeItemAtPath:outputDir error:&removeError];
+//        if (removeError) {
+//            NSLog(@"❌ 删除冲突文件失败: %@", removeError);
+//            return nil;
+//        }
+//    }
+//    
+//    // 不存在或者删除成功后，确保目录存在
+//    NSError *error = nil;
+//    if (![fileManager createDirectoryAtPath:outputDir
+//                withIntermediateDirectories:YES
+//                                 attributes:nil
+//                                      error:&error]) {
+//        NSLog(@"❌ 创建目录失败: %@", error);
+//        return nil;
+//    }
 
     return outputDir;
 }
