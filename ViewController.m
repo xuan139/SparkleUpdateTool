@@ -6,6 +6,8 @@
 //
 
 #import "ViewController.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
 
 @interface ViewController ()
 
@@ -103,6 +105,19 @@
     [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:12]];
     scrollView.documentView = self.logTextView;
     [self.view addSubview:scrollView];
+    
+    self.logTextView.font = [NSFont systemFontOfSize:14];
+    
+    [self logMessage:@"-------------------------------------------------------------------------------------------------"];
+    
+    [self logMessage:@"use generate keys to generate RAS public and private Keys before use this app!!! and Put public key into app you would like to update!!"];
+    
+    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
+    
+    
+    [self logMessage:[NSString stringWithFormat:@"log path: %@", logFilePath]];
+    
 }
 
 #pragma mark - Button Actions
@@ -111,7 +126,7 @@
     NSString *path = [self openAppSelectionPanel];
     if (path) {
         [self.oldAppPathField setStringValue:path];
-        [self logMessage:[NSString stringWithFormat:@"choose old App: %@", path]];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", path]];
     }
 }
 
@@ -119,17 +134,19 @@
     NSString *path = [self openAppSelectionPanel];
     if (path) {
         [self.updatedAppPathField setStringValue:path];
-        [self logMessage:[NSString stringWithFormat:@"choose new App: %@", path]];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", path]];
     }
 }
 
 /// 打开文件选择面板，限制只能选择 .app 文件
 - (NSString *)openAppSelectionPanel {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedFileTypes = @[@"app"];
+
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = NO;
     panel.allowsMultipleSelection = NO;
+    
+    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
 
     if ([panel runModal] == NSModalResponseOK) {
         return panel.URL.path;
@@ -140,57 +157,24 @@
 - (void)generateUpdate {
     NSString *oldPath = self.oldAppPathField.stringValue;
     NSString *newPath = self.updatedAppPathField.stringValue;
-//    NSString *outputDir = [self preparePatchOutputDirectory];
-    
     NSString *outputDir = [@"~/Documents/sparkle_patch" stringByExpandingTildeInPath];
 
     
     if (oldPath.length == 0 || newPath.length == 0) {
-        [self logMessage:@"❌ 请先选择旧版和新版 App 路径"];
+        [self logMessage:@"❌ Choose old and new App Paths"];
+        return;
+    }
+    
+    if (outputDir.length == 0) {
+        [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
         return;
     }
     
     // Step 1: Generate Patch
-//    [self runBinaryDeltaWithOldPath:oldPath newPath:newPath outputDir:outputDir];
-    
-    [self generatePatchWithOldApp:oldPath newApp:newPath];
-
+    [self generateBinaryDeltaWithOldPath:oldPath newPath:newPath outputDir:outputDir];
 }
 
-- (NSString *)preparePatchOutputDirectory {
-//    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-//    NSString *outputDir = [docsDir stringByAppendingPathComponent:@"sparkle_patch"];
-    NSString *outputDir = [@"~/Documents/sparkle_patch" stringByExpandingTildeInPath];
-
-//    NSFileManager *fileManager = [NSFileManager defaultManager];
-//    BOOL isDir = NO;
-//    BOOL exists = [fileManager fileExistsAtPath:outputDir isDirectory:&isDir];
-//    
-//    if (exists && !isDir) {
-//        // 如果存在但是是普通文件，先删除
-//        NSError *removeError = nil;
-//        [fileManager removeItemAtPath:outputDir error:&removeError];
-//        if (removeError) {
-//            NSLog(@"❌ 删除冲突文件失败: %@", removeError);
-//            return nil;
-//        }
-//    }
-//    
-//    // 不存在或者删除成功后，确保目录存在
-//    NSError *error = nil;
-//    if (![fileManager createDirectoryAtPath:outputDir
-//                withIntermediateDirectories:YES
-//                                 attributes:nil
-//                                      error:&error]) {
-//        NSLog(@"❌ 创建目录失败: %@", error);
-//        return nil;
-//    }
-
-    return outputDir;
-}
-
-
-- (void)runBinaryDeltaWithOldPath:(NSString *)oldPath
+- (void)generateBinaryDeltaWithOldPath:(NSString *)oldPath
                           newPath:(NSString *)newPath
                         outputDir:(NSString *)outputDir {
     
@@ -215,8 +199,8 @@
     // 构造 delta 文件输出路径
     NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
 
-    [self logMessage:[NSString stringWithFormat:@"✔️ 使用 binarydelta: %@", binaryDeltaPath]];
-    [self logMessage:@"开始调用 Sparkle 生成增量更新..."];
+    [self logMessage:[NSString stringWithFormat:@"✅ use binarydelta: %@", binaryDeltaPath]];
+    [self logMessage:@"call Sparkle binarydelta to generate delta..."];
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = binaryDeltaPath;
@@ -235,25 +219,28 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             [self logMessage:output];
             if ([[NSFileManager defaultManager] fileExistsAtPath:deltaPath]) {
-                [self logMessage:@"✅ finish create delta"];
+                [self logMessage:@"✅ finish generate delta"];
                 // ✅ 你也可以在这里调用签名方法，例如：
                 NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
+                            
+                [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", deltaPath]];
                 
                 [self signUpdateAtPath:deltaPath completion:^(NSString *signature) {
                     if (signature) {
                         // ✅ 拿到签名后可用于 appcast.xml 生成
                         NSLog(@"签名是：%@", signature);
-                        
-                        
+                        [self logMessage:[NSString stringWithFormat:@"✅ use signature is: %@", signature]];
                         
                         NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
                         NSString *appcastPath = [docsDir stringByAppendingPathComponent:@"appcast.xml"];
                         NSString *fullZipPath = [docsDir stringByAppendingPathComponent:@"OStation-2.0.zip"];
                         NSString *deltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
 
-                        NSLog(@"📄 Appcast Path: %@", appcastPath);
-                        NSLog(@"📦 Full ZIP Path: %@", fullZipPath);
-                        NSLog(@"🧩 Delta Path: %@", deltaPath);
+                        [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", appcastPath]];
+                        [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", fullZipPath]];
+                        [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", deltaPath]];
+
+                        
                         
                         // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
                         NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
@@ -281,15 +268,6 @@
 
     [task launch];
 }
-
-
-- (void)generatePatchWithOldApp:(NSString *)oldPath newApp:(NSString *)newPath {
-    NSString *outputDir = [self preparePatchOutputDirectory];
-    if (!outputDir) return;
-
-    [self runBinaryDeltaWithOldPath:oldPath newPath:newPath outputDir:outputDir];
-}
-
 
 
 
@@ -329,7 +307,7 @@
 
             if (match && [match numberOfRanges] > 1) {
                 NSString *signature = [output substringWithRange:[match rangeAtIndex:1]];
-                [self logMessage:[NSString stringWithFormat:@"✍️ 提取到签名: %@", signature]];
+                [self logMessage:[NSString stringWithFormat:@"✍️ retrieve: %@", signature]];
 
                 // 📦 自动拼装 appcast.xml 所需参数
                 NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -354,12 +332,12 @@
                                     deltaSignature:signature
                                         outputPath:appcastPath];
 
-                [self logMessage:@"✅ 已自动生成 Appcast.xml"];
+                [self logMessage:@"✅ already generate Appcast.xml"];
             } else {
-                [self logMessage:@"⚠️ 未能提取签名"];
+                [self logMessage:@"⚠️ cant retrieve signature"];
             }
 
-            [self logMessage:@"✅ 签名完成"];
+            [self logMessage:@"✅ finish generate delta signature and appcast.xml file and you can upload to your server manual or ? "];
         });
     };
 
@@ -429,44 +407,11 @@
     NSError *error = nil;
     [xml writeToFile:xmlOutputPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
     if (error) {
-//        NSLog(@"❌ 写入 appcast.xml 失败: %@", error);
-        [self logMessage:@"❌ 写入 appcast.xml 失败"];
+        [self logMessage:@"❌ write into appcast.xml failed"];
     } else {
-//        NSLog(@"✅ appcast.xml 写入完成: %@", xmlOutputPath);
-        [self logMessage:@"appcast.xml 写入完成"];
+//        [self logMessage:@"appcast.xml finished"];
+        [self logMessage:[NSString stringWithFormat:@"📄 appcast.xml finished: %@", xmlOutputPath]];
     }
-}
-
-
-
-- (void)generateAppcastFromPatch:(NSString *)directoryPath {
-    NSString *generateAppcastTool = @"/usr/local/bin/generate_appcast";
-
-    if (![[NSFileManager defaultManager] isExecutableFileAtPath:generateAppcastTool]) {
-        [self logMessage:@"❌ 找不到 generate_appcast 工具"];
-        return;
-    }
-
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = generateAppcastTool;
-    task.arguments = @[directoryPath];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = pipe;
-
-    NSFileHandle *readHandle = [pipe fileHandleForReading];
-    task.terminationHandler = ^(NSTask *finishedTask) {
-        NSData *outputData = [readHandle readDataToEndOfFile];
-        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self logMessage:@"📝 Appcast 生成完成"];
-            [self logMessage:output];
-        });
-    };
-
-    [task launch];
 }
 
 - (void)uploadPatchToServer:(NSString *)localPath remoteURL:(NSString *)remoteURL {
@@ -497,15 +442,41 @@
 
 - (void)logMessage:(NSString *)message {
     dispatch_async(dispatch_get_main_queue(), ^{
+        // 1. 生成带时间戳的日志
+        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+        [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
+        NSString *timestamp = [formatter stringFromDate:[NSDate date]];
+        NSString *timestampedMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
+
+        // 2. 更新 UI 显示
         NSString *existingText = self.logTextView.string ?: @"";
-        NSString *updatedText = [existingText stringByAppendingFormat:@"%@\n", message];
+        NSString *updatedText = [existingText stringByAppendingString:timestampedMessage];
         [self.logTextView setString:updatedText];
 
-        // 自动滚动到底部
         NSRange bottom = NSMakeRange(updatedText.length, 0);
         [self.logTextView scrollRangeToVisible:bottom];
+
+        // 3. 写入日志文件（追加）
+        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
+
+        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFilePath];
+        if (!fileHandle) {
+            // 文件不存在则创建
+            [[NSFileManager defaultManager] createFileAtPath:logFilePath contents:nil attributes:nil];
+            fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFilePath];
+        }
+
+        if (fileHandle) {
+            [fileHandle seekToEndOfFile];
+            NSData *logData = [timestampedMessage dataUsingEncoding:NSUTF8StringEncoding];
+            [fileHandle writeData:logData];
+            [fileHandle closeFile];
+        }
     });
 }
+
+
 
 - (NSString *)findSparkleCLIPath {
     NSTask *task = [[NSTask alloc] init];
