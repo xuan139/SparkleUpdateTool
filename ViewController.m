@@ -112,6 +112,11 @@
     
     [self logMessage:@"use generate keys to generate RAS public and private Keys before use this app!!! and Put public key into app you would like to update!!"];
     
+    
+    [self logMessage:@"put new app to ~/Documents/NewApp/"];
+    
+    [self logMessage:@"put old app to ~/Documents/OldApp/"];
+    
     NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
     
@@ -123,18 +128,24 @@
 #pragma mark - Button Actions
 
 - (void)selectOldApp {
-    NSString *path = [self openAppSelectionPanel];
-    if (path) {
-        [self.oldAppPathField setStringValue:path];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", path]];
+//    NSString *path = [self openAppSelectionPanel];
+    
+    NSString *oldAppPath = [self openAppFromSubdirectory:@"OldApp"];
+    
+    if (oldAppPath) {
+        [self.oldAppPathField setStringValue:oldAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", oldAppPath]];
     }
 }
 
 - (void)selectUpdatedApp {
-    NSString *path = [self openAppSelectionPanel];
-    if (path) {
-        [self.updatedAppPathField setStringValue:path];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", path]];
+//    NSString *path = [self openAppSelectionPanel];
+    
+    NSString *newAppPath = [self openAppFromSubdirectory:@"NewApp"];
+
+    if (newAppPath) {
+        [self.updatedAppPathField setStringValue:newAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", newAppPath]];
     }
 }
 
@@ -153,6 +164,39 @@
     }
     return nil;
 }
+
+- (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
+
+    // 如果目录不存在则创建
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:fullPath]) {
+        NSError *error = nil;
+        [fileManager createDirectoryAtPath:fullPath
+               withIntermediateDirectories:YES
+                                attributes:nil
+                                     error:&error];
+        if (error) {
+            NSLog(@"❌ 创建目录失败: %@", error.localizedDescription);
+            return nil;
+        }
+    }
+
+    // 打开 NSOpenPanel
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = NO;
+    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
+    panel.directoryURL = [NSURL fileURLWithPath:fullPath];
+
+    if ([panel runModal] == NSModalResponseOK) {
+        return panel.URL.path;
+    }
+    return nil;
+}
+
 
 - (void)generateUpdate {
     NSString *oldPath = self.oldAppPathField.stringValue;
