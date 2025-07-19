@@ -235,33 +235,43 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             [self logMessage:output];
             if ([[NSFileManager defaultManager] fileExistsAtPath:deltaPath]) {
-                [self logMessage:@"✅ 增量更新生成完成"];
+                [self logMessage:@"✅ finish create delta"];
                 // ✅ 你也可以在这里调用签名方法，例如：
-                // [self signUpdateAtPath:deltaPath];
-                
                 NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
-                [self signUpdateAtPath:deltaPath];
                 
-                
-                NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-                NSString *appcastPath = [docsDir stringByAppendingPathComponent:@"appcast.xml"];
-                NSString *fullZipPath = [docsDir stringByAppendingPathComponent:@"OStation-2.0.zip"];
-//                NSString *deltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+                [self signUpdateAtPath:deltaPath completion:^(NSString *signature) {
+                    if (signature) {
+                        // ✅ 拿到签名后可用于 appcast.xml 生成
+                        NSLog(@"签名是：%@", signature);
+                        
+                        
+                        
+                        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+                        NSString *appcastPath = [docsDir stringByAppendingPathComponent:@"appcast.xml"];
+                        NSString *fullZipPath = [docsDir stringByAppendingPathComponent:@"OStation-2.0.zip"];
+                        NSString *deltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
 
-                NSLog(@"📄 Appcast Path: %@", appcastPath);
-                NSLog(@"📦 Full ZIP Path: %@", fullZipPath);
-                NSLog(@"🧩 Delta Path: %@", deltaPath);
-                
-                [self generateAppcastXMLWithVersion:@"2.0"
-                                      shortVersion:@"2.0"
-                                           pubDate:[NSDate date]
-                                       fullZipPath:fullZipPath
-                                         deltaPath:deltaPath
-                                 deltaFromVersion:@"1.5"
-                                         signature:@"ApZHFghsd4Sl8nUy3eN2+XzO0VoD..." // zip 签名
-                                    deltaSignature:@"LWHx4F65ifViHpkguF0UziBnwYpi..." // delta 签名
-                                        outputPath:appcastPath];
-                
+                        NSLog(@"📄 Appcast Path: %@", appcastPath);
+                        NSLog(@"📦 Full ZIP Path: %@", fullZipPath);
+                        NSLog(@"🧩 Delta Path: %@", deltaPath);
+                        
+                        // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
+                        NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
+
+                        [self generateAppcastXMLWithVersion:@"2.0"
+                                              shortVersion:@"2.0"
+                                                   pubDate:[NSDate date]
+                                               fullZipPath:fullZipPath
+                                                 deltaPath:deltaPath
+                                         deltaFromVersion:@"1.5"
+                                                 signature:zipSignature
+                                            deltaSignature:signature
+                                                outputPath:appcastPath];
+                        
+                    } else {
+                        NSLog(@"签名提取失败");
+                    }
+                }];
                 
             } else {
                 [self logMessage:@"❌ 增量更新失败，未生成 update.delta 文件"];
@@ -280,7 +290,10 @@
     [self runBinaryDeltaWithOldPath:oldPath newPath:newPath outputDir:outputDir];
 }
 
-- (void)signUpdateAtPath:(NSString *)deltaPath {
+
+
+
+- (void)signUpdateAtPath:(NSString *)deltaPath completion:(void (^)(NSString *signature))completion {
     NSString *signToolPath = @"/usr/local/bin/sign_update";
 
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:signToolPath]) {
@@ -309,27 +322,50 @@
 
         dispatch_async(dispatch_get_main_queue(), ^{
             [self logMessage:output];
-            
-            // 使用正则表达式提取签名
-            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"sparkle:edSignature=\\\"([^\"]+)\\\"" options:0 error:nil];
+
+            NSError *error = nil;
+            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"sparkle:edSignature=\\\"([^\"]+)\\\"" options:0 error:&error];
             NSTextCheckingResult *match = [regex firstMatchInString:output options:0 range:NSMakeRange(0, output.length)];
-            
-            if (match && match.numberOfRanges > 1) {
+
+            if (match && [match numberOfRanges] > 1) {
                 NSString *signature = [output substringWithRange:[match rangeAtIndex:1]];
                 [self logMessage:[NSString stringWithFormat:@"✍️ 提取到签名: %@", signature]];
 
-                // 👉 可以将 signature 保存到变量 / 写入 appcast.xml / 显示 UI 等
+                // 📦 自动拼装 appcast.xml 所需参数
+                NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+                NSString *appcastPath = [docsDir stringByAppendingPathComponent:@"appcast.xml"];
+                NSString *fullZipPath = [docsDir stringByAppendingPathComponent:@"OStation-2.0.zip"];
+                NSString *deltaPathLocal = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+
+                NSLog(@"📄 Appcast Path: %@", appcastPath);
+                NSLog(@"📦 Full ZIP Path: %@", fullZipPath);
+                NSLog(@"🧩 Delta Path: %@", deltaPathLocal);
+
+                // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
+                NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
+
+                [self generateAppcastXMLWithVersion:@"2.0"
+                                      shortVersion:@"2.0"
+                                           pubDate:[NSDate date]
+                                       fullZipPath:fullZipPath
+                                         deltaPath:deltaPathLocal
+                                 deltaFromVersion:@"1.5"
+                                         signature:zipSignature
+                                    deltaSignature:signature
+                                        outputPath:appcastPath];
+
+                [self logMessage:@"✅ 已自动生成 Appcast.xml"];
             } else {
-                [self logMessage:@"⚠️ 未能从输出中提取签名"];
+                [self logMessage:@"⚠️ 未能提取签名"];
             }
 
             [self logMessage:@"✅ 签名完成"];
         });
-
     };
 
     [task launch];
 }
+
 
 
 - (void)generateAppcastXMLWithVersion:(NSString *)version
