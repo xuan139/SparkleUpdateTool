@@ -10,8 +10,8 @@ https://github.com/sparkle-project/Sparkle.git
 
 
 ## 第一步 用 generate keys 产生公钥 和 私钥 
-###    把私钥添加到所有要更新的app的Info.list 里 
-###    公钥同时会保存到chain里
+###    它会把私钥保存进你的钥匙串，并输出公钥。
+###    把公钥放入每个要更新的app的 info.list 里
 
 ## 第二步 build 运行SparkleUpdateTool.app 产生 增量delta, 签名, 和 castxml 后放到服务器上 要包含old app 的zip ，delta， 签名，类似如下结构
 
