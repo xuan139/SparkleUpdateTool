@@ -321,7 +321,7 @@
                     if (signature) {
                         // ✅ 拿到签名后可用于 appcast.xml 生成
                         NSLog(@"签名是：%@", signature);
-                        [self logMessage:[NSString stringWithFormat:@"✅ use signature is: %@", signature]];
+                        [self logMessage:[NSString stringWithFormat:@"✅ current signature is: %@", signature]];
                         
                         NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
                         
@@ -334,27 +334,23 @@
                         
                         NSString *sourceDeltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
                         
+                        [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", docsDir]];
                         [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", appcastPath]];
                         [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", fullZipPath]];
                         [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", deltaPath]];
-                        
                         [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", sourceDeltaPath]];
 
-                
-
-                        
                         [self copyDeltaFromPath:sourceDeltaPath toDirectory:oldAppDir];
 
-                        
                         // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
                         NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
 
-                        [self generateAppcastXMLWithVersion:@"2.0"
-                                              shortVersion:@"2.0"
+                        [self generateAppcastXMLWithVersion:@"2.2"
+                                              shortVersion:@"2.2"
                                                    pubDate:[NSDate date]
                                                fullZipPath:fullZipPath
                                                  deltaPath:deltaPath
-                                         deltaFromVersion:@"1.5"
+                                         deltaFromVersion:@"1.7"
                                                  signature:zipSignature
                                             deltaSignature:signature
                                                 outputPath:appcastPath];
