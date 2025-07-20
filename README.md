@@ -11,20 +11,20 @@ https://github.com/sparkle-project/Sparkle.git
 
 ## 第一步 用 generate keys 产生公钥 和 私钥 
 ###    它会把私钥保存进你的钥匙串，并输出公钥。
-###    可以把公钥放入每个要更新的app的 info.list 里，如果自己写update ,那可以不写入app的 info.list
-###    那要自己实现签名的认证
+###    把公钥放入每个要更新的app的 info.list 里，
+###    如果自己写update 那要自己读出公钥 实现签名的认证
 
 ### SparkleUpdateTool % generate_keys
 ### A pre-existing signing key was found. This is how it should appear in your Info.plist:
 
-###    <key>SUPublicEDKey</key>
-###    <string>01v+wUd6hYpA0Riixc9C76nJm8vjn85uRJJiHNEIwKU=</string>
+### <key>SUPublicEDKey</key>
+### <string>01v+wUd6hYpA0Riixc9C76nJm8vjn85uRJJiHNEIwKU=</string>
 
 
-###    <key>SUPublicEDKey</key>
-###    <string>01v+wUd6hYpA0Riixc9C76nJm8vjn85uRJJiHNEIwKU=</string>
-
-## 第二步 build 运行SparkleUpdateTool.app 产生 增量delta, 签名, 和 castxml 后放到服务器上 要包含old app 的zip ，delta， 签名，类似如下结构
+## 第二步 
+### 用binarydelta 产生 增量delta
+### zip new app 后 用sign_update 对delta 和 newApp.zip 签名
+### 产生castxml 后放到服务器上 要包含newApp的zip ，delta 以及newApp的zip ，delta的签名，类似如下结构
 
     <?xml version="1.0" encoding="utf-8"?>
     <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -58,7 +58,8 @@ https://github.com/sparkle-project/Sparkle.git
       </channel>
     </rss>
 
-## 可以用 binarydeltavapply old.zip 加 delta 产生新的 new。zip
-## 新建一个app 用于update 相关app 待开发
-## 待测试 所有的游戏平台 ostation
+## 第三步 在本地需要定时检查网上的XML 文件 根据版本号进行更新
+## 可以用 binarydelta apply old.zip 加 delta 产生新的 delta产生新app
+## 新建一个app 用于版本控制和所有app的历史记录，所有app 历史记录
+## 待测试 所有的游戏平台 和ostation
 
