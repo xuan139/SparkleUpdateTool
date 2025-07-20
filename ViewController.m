@@ -34,6 +34,14 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self setupUI];
+    
+    self.docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    self.logFilePath = [self.docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
+    
+    _appcastPath = [self->_oldAppPath stringByAppendingPathComponent:@"appcast.xml"];
+    _fullZipPath = [self->_oldAppPath stringByAppendingPathComponent:@"OStation.zip"];
+    _deltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+    _sourceDeltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
 }
 
 
@@ -117,11 +125,8 @@
     
     [self logMessage:@"put old app to ~/Documents/OldApp/"];
     
-    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
     
-    
-    [self logMessage:[NSString stringWithFormat:@"log path: %@", logFilePath]];
+    [self logMessage:[NSString stringWithFormat:@"log path: %@", _logFilePath]];
     
 }
 
@@ -130,12 +135,21 @@
 - (void)selectOldApp {
 //    NSString *path = [self openAppSelectionPanel];
     
-    NSString *oldAppPath = [self openAppFromSubdirectory:@"OldApp"];
+    _oldAppPath = [self openAppFromSubdirectory:@"OldApp"];
     
-    if (oldAppPath) {
-        [self.oldAppPathField setStringValue:oldAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", oldAppPath]];
-        NSString *zipPath = [self zipAppAtPath:oldAppPath];
+    if (_oldAppPath) {
+        [self.oldAppPathField setStringValue:_oldAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppPath]];
+        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_oldAppPath];
+
+        if (versionInfo) {
+            _versionOld = versionInfo[@"version"];
+            _buildOld = versionInfo[@"build"];
+            [self logMessage:[NSString stringWithFormat:@"📦 OLD 版本号: %@ (Build: %@)", _versionOld, _buildOld]];
+        }
+
+        
+        NSString *zipPath = [self zipAppAtPath:_oldAppPath];
         [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", zipPath]];
     }
 }
@@ -143,13 +157,24 @@
 - (void)selectUpdatedApp {
 //    NSString *path = [self openAppSelectionPanel];
     
-    NSString *newAppPath = [self openAppFromSubdirectory:@"NewApp"];
+    _updateAppPath = [self openAppFromSubdirectory:@"NewApp"];
 
-    if (newAppPath) {
-        [self.updatedAppPathField setStringValue:newAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", newAppPath]];
+    if (_updateAppPath) {
+        [self.updatedAppPathField setStringValue:_updateAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _updateAppPath]];
+        
+        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_updateAppPath];
+
+        if (versionInfo) {
+            _versionNew = versionInfo[@"version"];
+            _buildNew = versionInfo[@"build"];
+            [self logMessage:[NSString stringWithFormat:@"📦 NEW 版本号: %@ (Build: %@)", _versionNew, _buildNew]];
+        }
+        
+        
+        NSString *zipPath = [self zipAppAtPath:_updateAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", zipPath]];
     }
-    
 }
 
 
@@ -181,7 +206,7 @@
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self logMessage:output];
+//            [self logMessage:output];
             if (finishedTask.terminationStatus == 0) {
                 [self logMessage:@"✅ 压缩完成"];
             } else {
@@ -316,48 +341,23 @@
                 NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
                             
                 [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", deltaPath]];
+                [self logAllImportantPaths];
                 
-                [self signUpdateAtPath:deltaPath completion:^(NSString *signature) {
-                    if (signature) {
-                        // ✅ 拿到签名后可用于 appcast.xml 生成
-                        NSLog(@"签名是：%@", signature);
-                        [self logMessage:[NSString stringWithFormat:@"✅ current signature is: %@", signature]];
-                        
-                        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-                        
-                        NSString *oldAppDir = [docsDir stringByAppendingPathComponent:@"OldApp"];
-                        
-                        NSString *appcastPath = [oldAppDir stringByAppendingPathComponent:@"appcast.xml"];
-                        NSString *fullZipPath = [oldAppDir stringByAppendingPathComponent:@"OStation.zip"];
-                        
-                        NSString *deltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
-                        
-                        NSString *sourceDeltaPath = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
-                        
-                        [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", docsDir]];
-                        [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", appcastPath]];
-                        [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", fullZipPath]];
-                        [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", deltaPath]];
-                        [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", sourceDeltaPath]];
-
-                        [self copyDeltaFromPath:sourceDeltaPath toDirectory:oldAppDir];
-
-                        // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
-                        NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
-
-                        [self generateAppcastXMLWithVersion:@"2.2"
-                                              shortVersion:@"2.2"
+                [self signZipAndDeltaWithZipPath:self.updateAppPath
+                                       deltaPath:self.deltaPath
+                                      completion:^(NSString *zipSignature, NSString *deltaSignature) {
+                    if (zipSignature && deltaSignature) {
+                        [self generateAppcastXMLWithVersion:self.versionOld
+                                               shortVersion:self.buildOld
                                                    pubDate:[NSDate date]
-                                               fullZipPath:fullZipPath
-                                                 deltaPath:deltaPath
-                                         deltaFromVersion:@"1.7"
+                                               fullZipPath:self.updateAppPath
+                                                 deltaPath:self.deltaPath
+                                           deltaFromVersion:self.versionNew
                                                  signature:zipSignature
-                                            deltaSignature:signature
-                                                outputPath:appcastPath];
-                        
-                        
+                                            deltaSignature:deltaSignature
+                                                outputPath:self.appcastPath];
                     } else {
-                        NSLog(@"签名提取失败");
+                        [self logMessage:@"❌ 生成 appcast.xml 失败：签名为空"];
                     }
                 }];
                 
@@ -369,6 +369,39 @@
 
     [task launch];
 }
+
+- (void)signZipAndDeltaWithZipPath:(NSString *)zipPath
+                         deltaPath:(NSString *)deltaPath
+                         completion:(void (^)(NSString *zipSignature, NSString *deltaSignature))completion{
+    [self signUpdateAtPath:zipPath completion:^(NSString *zipSignature) {
+        if (!zipSignature) {
+            [self logMessage:@"❌ ZIP 签名失败"];
+            if (completion) completion(nil, nil);
+            return;
+        }
+
+        [self signUpdateAtPath:deltaPath completion:^(NSString *deltaSignature) {
+            if (!deltaSignature) {
+                [self logMessage:@"❌ DELTA 签名失败"];
+                if (completion) completion(nil, nil);
+                return;
+            }
+
+            [self logMessage:@"✅ ZIP 和 DELTA 签名完成"];
+            if (completion) completion(zipSignature, deltaSignature);
+        }];
+    }];
+}
+
+
+- (void)logAllImportantPaths {
+    [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
+    [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastPath]];
+    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.updateAppPath]];
+    [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaPath]];
+    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaPath]];
+}
+
 
 
 - (void)copyDeltaFromPath:(NSString *)sourceDeltaPath toDirectory:(NSString *)targetDir {
@@ -405,6 +438,25 @@
         [self logMessage:[NSString stringWithFormat:@"✅ 已将 update.delta 拷贝到 %@", targetDir]];
     }
 }
+
+- (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath {
+    NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
+    NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
+
+    if (!infoPlist) {
+        [self logMessage:[NSString stringWithFormat:@"❌ 无法读取 Info.plist: %@", infoPlistPath]];
+        return nil;
+    }
+
+    NSString *version = infoPlist[@"CFBundleShortVersionString"] ?: @"";
+    NSString *build = infoPlist[@"CFBundleVersion"] ?: @"";
+
+    return @{
+        @"version": version,
+        @"build": build
+    };
+}
+
 
 
 - (void)signUpdateAtPath:(NSString *)deltaPath completion:(void (^)(NSString *signature))completion {
@@ -451,7 +503,7 @@
             NSTextCheckingResult *match = [regex firstMatchInString:output options:0 range:NSMakeRange(0, output.length)];
             if (match && [match numberOfRanges] > 1) {
                 NSString *signature = [output substringWithRange:[match rangeAtIndex:1]];
-                [self logMessage:[NSString stringWithFormat:@"✍️ 提取到签名: %@", signature]];
+//                [self logMessage:[NSString stringWithFormat:@"✍️ 提取到签名: %@", signature]];
                 if (completion) completion(signature);
             } else {
                 [self logMessage:@"❌ 未找到签名"];
@@ -462,80 +514,6 @@
 
     [task launch];
 }
-//
-//- (void)signUpdateAtPath:(NSString *)deltaPath completion:(void (^)(NSString *signature))completion {
-//    NSString *signToolPath = @"/usr/local/bin/sign_update";
-//
-//    if (![[NSFileManager defaultManager] isExecutableFileAtPath:signToolPath]) {
-//        [self logMessage:@"❌ 找不到 sign_update 工具，请确认路径正确"];
-//        return;
-//    }
-//
-//    if (![[NSFileManager defaultManager] fileExistsAtPath:deltaPath]) {
-//        [self logMessage:@"❌ 找不到要签名的 delta 更新文件"];
-//        return;
-//    }
-//
-//    NSTask *task = [[NSTask alloc] init];
-//    task.launchPath = signToolPath;
-//    task.arguments = @[ deltaPath ]; // 默认使用钥匙串中的私钥
-//
-//    NSPipe *pipe = [NSPipe pipe];
-//    task.standardOutput = pipe;
-//    task.standardError = pipe;
-//
-//    NSFileHandle *readHandle = [pipe fileHandleForReading];
-//
-//    task.terminationHandler = ^(NSTask *finishedTask) {
-//        NSData *outputData = [readHandle readDataToEndOfFile];
-//        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-//
-//        dispatch_async(dispatch_get_main_queue(), ^{
-//            [self logMessage:output];
-//
-//            NSError *error = nil;
-//            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"sparkle:edSignature=\\\"([^\"]+)\\\"" options:0 error:&error];
-//            NSTextCheckingResult *match = [regex firstMatchInString:output options:0 range:NSMakeRange(0, output.length)];
-//
-//            if (match && [match numberOfRanges] > 1) {
-//                NSString *signature = [output substringWithRange:[match rangeAtIndex:1]];
-//                [self logMessage:[NSString stringWithFormat:@"✍️ retrieve: %@", signature]];
-//
-//                // 📦 自动拼装 appcast.xml 所需参数
-//                NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-//                NSString *appcastPath = [docsDir stringByAppendingPathComponent:@"appcast.xml"];
-//                NSString *fullZipPath = [docsDir stringByAppendingPathComponent:@"OStation-2.0.zip"];
-//                NSString *deltaPathLocal = [docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
-//
-//                NSLog(@"📄 Appcast Path: %@", appcastPath);
-//                NSLog(@"📦 Full ZIP Path: %@", fullZipPath);
-//                NSLog(@"🧩 Delta Path: %@", deltaPathLocal);
-//
-//                // ⚠️ 替换为你自己预先生成的 full zip 的签名字符串
-//                NSString *zipSignature = @"ApZHFghsd4Sl8nUy3eN2+XzO0VoD...";
-//
-//                [self generateAppcastXMLWithVersion:@"2.0"
-//                                      shortVersion:@"2.0"
-//                                           pubDate:[NSDate date]
-//                                       fullZipPath:fullZipPath
-//                                         deltaPath:deltaPathLocal
-//                                 deltaFromVersion:@"1.5"
-//                                         signature:zipSignature
-//                                    deltaSignature:signature
-//                                        outputPath:appcastPath];
-//
-//                [self logMessage:@"✅ already generate Appcast.xml"];
-//            } else {
-//                [self logMessage:@"⚠️ cant retrieve signature"];
-//            }
-//
-//            [self logMessage:@"✅ finish generate delta signature and appcast.xml file and you can upload to your server manual or ? "];
-//        });
-//    };
-//
-//    [task launch];
-//}
-
 
 
 - (void)generateAppcastXMLWithVersion:(NSString *)version
