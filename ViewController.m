@@ -34,14 +34,6 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self setupUI];
-    
-    self.docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    self.logFilePath = [self.docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
-    
-    _appcastPath = [self->_oldAppPath stringByAppendingPathComponent:@"appcast.xml"];
-    _fullZipPath = [self->_oldAppPath stringByAppendingPathComponent:@"OStation.zip"];
-    _deltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
-    _sourceDeltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
 }
 
 
@@ -119,13 +111,8 @@
     [self logMessage:@"-------------------------------------------------------------------------------------------------"];
     
     [self logMessage:@"use generate keys to generate RAS public and private Keys before use this app!!! and Put public key into app you would like to update!!"];
-    
-    
     [self logMessage:@"put new app to ~/Documents/NewApp/"];
-    
     [self logMessage:@"put old app to ~/Documents/OldApp/"];
-    
-    
     [self logMessage:[NSString stringWithFormat:@"log path: %@", _logFilePath]];
     
 }
@@ -149,8 +136,8 @@
         }
 
         
-        NSString *zipPath = [self zipAppAtPath:_oldAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", zipPath]];
+//        _fullZipPath = [self zipAppAtPath:_oldAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", _fullZipPath]];
     }
 }
 
@@ -170,10 +157,8 @@
             _buildNew = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 NEW 版本号: %@ (Build: %@)", _versionNew, _buildNew]];
         }
-        
-        
-        NSString *zipPath = [self zipAppAtPath:_updateAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", zipPath]];
+        _fullZipPath = [self zipAppAtPath:_updateAppPath];
+        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", _fullZipPath]];
     }
 }
 
@@ -272,23 +257,20 @@
 
 
 - (void)generateUpdate {
-    NSString *oldPath = self.oldAppPathField.stringValue;
-    NSString *newPath = self.updatedAppPathField.stringValue;
-    NSString *outputDir = [@"~/Documents/sparkle_patch" stringByExpandingTildeInPath];
+    [self logAllImportantPaths];
 
-    
-    if (oldPath.length == 0 || newPath.length == 0) {
+    if (_oldAppPath.length == 0 || _updateAppPath.length == 0) {
         [self logMessage:@"❌ Choose old and new App Paths"];
         return;
     }
     
-    if (outputDir.length == 0) {
+    if (_appcastPath.length == 0) {
         [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
         return;
     }
     
     // Step 1: Generate Patch
-    [self generateBinaryDeltaWithOldPath:oldPath newPath:newPath outputDir:outputDir];
+    [self generateBinaryDeltaWithOldPath:_oldAppPath newPath:_updateAppPath outputDir:_appcastPath];
 }
 
 - (void)generateBinaryDeltaWithOldPath:(NSString *)oldPath
@@ -343,19 +325,19 @@
                 [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", deltaPath]];
                 [self logAllImportantPaths];
                 
-                [self signZipAndDeltaWithZipPath:self.updateAppPath
+                [self signZipAndDeltaWithZipPath:self.fullZipPath
                                        deltaPath:self.deltaPath
                                       completion:^(NSString *zipSignature, NSString *deltaSignature) {
                     if (zipSignature && deltaSignature) {
                         [self generateAppcastXMLWithVersion:self.versionOld
                                                shortVersion:self.buildOld
                                                    pubDate:[NSDate date]
-                                               fullZipPath:self.updateAppPath
+                                                fullZipPath:self.fullZipPath
                                                  deltaPath:self.deltaPath
                                            deltaFromVersion:self.versionNew
                                                  signature:zipSignature
                                             deltaSignature:deltaSignature
-                                                outputPath:self.appcastPath];
+                                                 outputPath:self.appcastPath];
                     } else {
                         [self logMessage:@"❌ 生成 appcast.xml 失败：签名为空"];
                     }
@@ -393,11 +375,39 @@
     }];
 }
 
+- (void)writeAppcastXML:(NSString *)xml toPath:(NSString *)appcastPath {
+
+    NSError *writeError = nil;
+    
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateFormat = @"yyyy-MM-dd_HH-mm-ss";
+    NSString *timestamp = [formatter stringFromDate:[NSDate date]];
+
+    NSString *fileName = [NSString stringWithFormat:@"appcast_%@.xml", timestamp];
+
+    // 最终 appcast 路径
+    appcastPath = [_docsDir stringByAppendingPathComponent:fileName];
+    
+    BOOL success = [xml writeToFile:appcastPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
+    if (!success || writeError) {
+        [self logMessage:[NSString stringWithFormat:@"❌ 写入 appcast.xml 失败: %@", writeError.localizedDescription]];
+    } else {
+        [self logMessage:[NSString stringWithFormat:@"📄 成功写入 appcast.xml: %@", appcastPath]];
+    }
+}
 
 - (void)logAllImportantPaths {
+    
+    self.docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    self.logFilePath = [self.docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
+    self.appcastPath = [self.docsDir stringByAppendingPathComponent:@"appcast.xml"];
+//    self.fullZipPath = [self->_updateAppPath stringByAppendingPathComponent:@"OStation.zip"];
+    self.deltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+    self.sourceDeltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+    
     [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
     [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastPath]];
-    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.updateAppPath]];
+    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.fullZipPath]];
     [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaPath]];
     [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaPath]];
 }
@@ -517,14 +527,14 @@
 
 
 - (void)generateAppcastXMLWithVersion:(NSString *)version
-                       shortVersion:(NSString *)shortVersion
-                         pubDate:(NSDate *)pubDate
-                      fullZipPath:(NSString *)zipPath
-                        deltaPath:(NSString *)deltaPath
+                         shortVersion:(NSString *)shortVersion
+                              pubDate:(NSDate *)pubDate
+                          fullZipPath:(NSString *)zipPath
+                            deltaPath:(NSString *)deltaPath
                     deltaFromVersion:(NSString *)deltaFromVersion
-                       signature:(NSString *)signature
-                  deltaSignature:(NSString *)deltaSignature
-                      outputPath:(NSString *)xmlOutputPath
+                            signature:(NSString *)signature
+                       deltaSignature:(NSString *)deltaSignature
+                           outputPath:(NSString *)xmlOutputPath
 {
     // 日期格式化
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
@@ -573,16 +583,10 @@
                      version, version, shortVersion, fullSize, signature,
                      deltaFromVersion, version, version, deltaFromVersion, deltaSize, deltaSignature];
 
-    // 写入 XML 到目标路径
-    NSError *error = nil;
-    [xml writeToFile:xmlOutputPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
-    if (error) {
-        [self logMessage:@"❌ write into appcast.xml failed"];
-    } else {
-//        [self logMessage:@"appcast.xml finished"];
-        [self logMessage:[NSString stringWithFormat:@"📄 appcast.xml finished: %@", xmlOutputPath]];
-    }
+    // 写入 XML 文件（封装）
+    [self writeAppcastXML:xml toPath:xmlOutputPath];
 }
+
 
 - (void)uploadPatchToServer:(NSString *)localPath remoteURL:(NSString *)remoteURL {
     // 你可以换成 curl / rsync / scp
