@@ -412,6 +412,41 @@
     [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaPath]];
 }
 
+- (BOOL)verifySignatureUsingSignUpdate:(NSString *)filePath
+                              signature:(NSString *)signature
+                             publicKeyPath:(NSString *)pubKeyPath
+                                   error:(NSError **)error {
+
+    NSString *signToolPath = @"/usr/local/bin/sign_update";
+    
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:signToolPath]) {
+        if (error) *error = [NSError errorWithDomain:@"SparkleVerify" code:1 userInfo:@{NSLocalizedDescriptionKey: @"找不到 sign_update 工具"}];
+        return NO;
+    }
+
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = signToolPath;
+    task.arguments = @[ @"verify", filePath, signature, pubKeyPath ];
+
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    task.standardError = pipe;
+
+    NSFileHandle *readHandle = [pipe fileHandleForReading];
+
+    [task launch];
+    [task waitUntilExit];
+
+    NSData *outputData = [readHandle readDataToEndOfFile];
+    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+
+    if ([output containsString:@"Signature is valid"]) {
+        return YES;
+    } else {
+        if (error) *error = [NSError errorWithDomain:@"SparkleVerify" code:2 userInfo:@{NSLocalizedDescriptionKey: output ?: @"未知错误"}];
+        return NO;
+    }
+}
 
 
 - (void)copyDeltaFromPath:(NSString *)sourceDeltaPath toDirectory:(NSString *)targetDir {
