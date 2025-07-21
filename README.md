@@ -27,7 +27,7 @@ A pre-existing signing key was found. This is how it should appear in your Info.
 ```
 
 
-## Step 2:   binarydelta create
+## Step 2:   binarydelta create update.delta
 
 ### Must Have
 binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
@@ -84,13 +84,14 @@ Sample `appcast.xml` structure:
 </rss>
 ```
 
-## Step 4:  Way of Uodater
+## Step 4:  Way of Updater
+### SDK for origin app
 - The app must periodically check the remote `appcast.xml`.  
+### Not origin app
+- check manually inside Updater App 
 
-- or check manually inside Updater App 
 
-
-## Step 5:  binarydelta apply
+## Step 5:  binarydelta apply 
 binarydelta apply OStation.app NewStation.app update.delta --verbose
 Applying version 4.1 patch...
 Verifying source...
