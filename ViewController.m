@@ -7,22 +7,8 @@
 
 #import "ViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-
-
-@interface ViewController ()
-
-@property (nonatomic, strong) NSTextField *oldAppLabel;
-@property (nonatomic, strong) NSTextField *oldAppPathField;
-@property (nonatomic, strong) NSButton *oldAppSelectButton;
-
-@property (nonatomic, strong) NSTextField *updatedAppLabel;
-@property (nonatomic, strong) NSTextField *updatedAppPathField;
-@property (nonatomic, strong) NSButton *updatedAppSelectButton;
-
-@property (nonatomic, strong) NSButton *generateUpdateButton;
-@property (nonatomic, strong) NSTextView *logTextView;
-
-@end
+#import "SparkleHelper.h"
+#import "FileHelper.h"
 
 @implementation ViewController
 
@@ -33,10 +19,44 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+//    [SparkleHelper generateKeys];
+//    NSString *publicKey = [SparkleHelper getPublicKey];
+//    if (publicKey) {
+//        NSLog(@"✅ 公钥为: %@", publicKey);
+//    } else {
+//        NSLog(@"⚠️ 未能获取公钥");
+//    }
+//    [self setupUI];
+    
     [self setupUI];
+    [self setupDir];
+
 }
+- (void)setupDir{
 
+    NSString *sparkleOutPutDir = [FileHelper fullPathInDocuments:@"sparkle_output"];
+    
+    NSError *error = nil;
+    _outputDir = [FileHelper createDirectoryAtPath:sparkleOutPutDir error:&error];
+    
+    _deltaDir = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
+    [FileHelper prepareEmptyFileAtPath:_deltaDir];
+    
+    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
+    [FileHelper prepareEmptyFileAtPath:_logFileDir];
+    
+    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
+    [FileHelper prepareEmptyFileAtPath:_appcastDir];
+    
 
+    [self logMessage:[NSString stringWithFormat:@"outputDir: %@", _outputDir]];
+    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",  _deltaDir]];
+    
+    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
+    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
+    
+    
+}
 
 #pragma mark - setupUI
 - (void)setupUI {
@@ -111,54 +131,48 @@
     [self logMessage:@"-------------------------------------------------------------------------------------------------"];
     
     [self logMessage:@"use generate keys to generate RAS public and private Keys before use this app!!! and Put public key into app you would like to update!!"];
-    [self logMessage:@"put new app to ~/Documents/NewApp/"];
-    [self logMessage:@"put old app to ~/Documents/OldApp/"];
-    [self logMessage:[NSString stringWithFormat:@"log path: %@", _logFilePath]];
-    
+
+
+
 }
 
 #pragma mark - Button Actions
 
 - (void)selectOldApp {
-//    NSString *path = [self openAppSelectionPanel];
-    
-    _oldAppPath = [self openAppFromSubdirectory:@"OldApp"];
-    
-    if (_oldAppPath) {
-        [self.oldAppPathField setStringValue:_oldAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppPath]];
-        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_oldAppPath];
+ 
+    _oldAppDir = [self openAppFromSubdirectory:@"sparkleOldApp"];
+    if (_oldAppDir) {
+        [self.oldAppPathField setStringValue:_oldAppDir];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppDir]];
+        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_oldAppDir];
 
         if (versionInfo) {
-            _versionOld = versionInfo[@"version"];
-            _buildOld = versionInfo[@"build"];
-            [self logMessage:[NSString stringWithFormat:@"📦 OLD 版本号: %@ (Build: %@)", _versionOld, _buildOld]];
+            _oldVersion = versionInfo[@"version"];
+            _oldBuildVersion = versionInfo[@"build"];
+            [self logMessage:[NSString stringWithFormat:@"📦 OLD 版本号: %@ (Build: %@)", _oldVersion, _oldBuildVersion]];
         }
 
-        
-//        _fullZipPath = [self zipAppAtPath:_oldAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", _fullZipPath]];
+        _oldfullZipPathFileName = [self zipAppAtPath:_oldAppDir];
+        [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", _oldfullZipPathFileName]];
     }
 }
 
 - (void)selectUpdatedApp {
-//    NSString *path = [self openAppSelectionPanel];
-    
-    _updateAppPath = [self openAppFromSubdirectory:@"NewApp"];
+    _NewAppDir = [self openAppFromSubdirectory:@"sparkleNewApp"];
 
-    if (_updateAppPath) {
-        [self.updatedAppPathField setStringValue:_updateAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _updateAppPath]];
+    if (_NewAppDir) {
+        [self.updatedAppPathField setStringValue:_NewAppDir];
+        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _NewAppDir]];
         
-        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_updateAppPath];
+        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_NewAppDir];
 
         if (versionInfo) {
-            _versionNew = versionInfo[@"version"];
-            _buildNew = versionInfo[@"build"];
-            [self logMessage:[NSString stringWithFormat:@"📦 NEW 版本号: %@ (Build: %@)", _versionNew, _buildNew]];
+            _NewVersion = versionInfo[@"version"];
+            _NewBuildVersion = versionInfo[@"build"];
+            [self logMessage:[NSString stringWithFormat:@"📦 NEW 版本号: %@ (Build: %@)", _NewVersion, _NewBuildVersion]];
         }
-        _fullZipPath = [self zipAppAtPath:_updateAppPath];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", _fullZipPath]];
+        _newfullZipPathFileName = [self zipAppAtPath:_NewAppDir];
+        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", _newfullZipPathFileName]];
     }
 }
 
@@ -259,23 +273,23 @@
 - (void)generateUpdate {
     [self logAllImportantPaths];
 
-    if (_oldAppPath.length == 0 || _updateAppPath.length == 0) {
+    if (_oldAppDir.length == 0 || _NewAppDir.length == 0) {
         [self logMessage:@"❌ Choose old and new App Paths"];
         return;
     }
     
-    if (_appcastPath.length == 0) {
+    if (_deltaDir.length == 0) {
         [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
         return;
     }
     
     // Step 1: Generate Patch
-    [self generateBinaryDeltaWithOldPath:_oldAppPath newPath:_updateAppPath outputDir:_appcastPath];
+    [self generateBinaryDeltaWithOldPath:_oldAppDir newPath:_NewAppDir];
 }
 
+
 - (void)generateBinaryDeltaWithOldPath:(NSString *)oldPath
-                          newPath:(NSString *)newPath
-                        outputDir:(NSString *)outputDir {
+                          newPath:(NSString *)newPath{
     
     NSString *binaryDeltaPath = @"/usr/local/bin/binarydelta";
 
@@ -284,26 +298,28 @@
         return;
     }
 
-    // 确保输出目录存在
-    NSError *dirError = nil;
-    [[NSFileManager defaultManager] createDirectoryAtPath:outputDir
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:&dirError];
-    if (dirError) {
-        [self logMessage:[NSString stringWithFormat:@"❌ 创建输出目录失败: %@", dirError]];
-        return;
+    NSString *deltaDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/sparkle_patch"];
+    BOOL isDir = NO;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:deltaDir isDirectory:&isDir] || !isDir) {
+        NSError *mkdirErr = nil;
+        [[NSFileManager defaultManager] createDirectoryAtPath:deltaDir withIntermediateDirectories:YES attributes:nil error:&mkdirErr];
+        if (mkdirErr) {
+            [self logMessage:[NSString stringWithFormat:@"❌ 创建目录失败: %@", mkdirErr.localizedDescription]];
+            return;
+        }
     }
 
-    // 构造 delta 文件输出路径
-    NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
-
+    _deltaPath = [deltaDir stringByAppendingPathComponent:@"update.delta"];
+    
+    [self logMessage:[NSString stringWithFormat:@"✅ _deltaDir: %@", deltaDir]];
     [self logMessage:[NSString stringWithFormat:@"✅ use binarydelta: %@", binaryDeltaPath]];
+    [self logMessage:[NSString stringWithFormat:@"✅ use deltaPath: %@", _deltaPath]];
+    
     [self logMessage:@"call Sparkle binarydelta to generate delta..."];
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = binaryDeltaPath;
-    task.arguments = @[ @"create", oldPath, newPath, deltaPath ]; // ✅ 使用 deltaPath 而不是目录
+    task.arguments = @[ @"create", oldPath, newPath, _deltaPath ]; // ✅ 使用 deltaPath 而不是目录
 
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
@@ -316,28 +332,27 @@
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self logMessage:output];
-            if ([[NSFileManager defaultManager] fileExistsAtPath:deltaPath]) {
+//            [self logMessage:output];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:self->_deltaPath]) {
                 [self logMessage:@"✅ finish generate delta"];
                 // ✅ 你也可以在这里调用签名方法，例如：
-                NSString *deltaPath = [outputDir stringByAppendingPathComponent:@"update.delta"];
-                            
-                [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", deltaPath]];
+
+                [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", self->_deltaPath]];
                 [self logAllImportantPaths];
                 
-                [self signZipAndDeltaWithZipPath:self.fullZipPath
+                [self signZipAndDeltaWithZipPath:self.newfullZipPathFileName
                                        deltaPath:self.deltaPath
                                       completion:^(NSString *zipSignature, NSString *deltaSignature) {
                     if (zipSignature && deltaSignature) {
-                        [self generateAppcastXMLWithVersion:self.versionOld
-                                               shortVersion:self.buildOld
+                        [self generateAppcastXMLWithVersion:self->_oldVersion
+                                               shortVersion:self->_oldBuildVersion
                                                    pubDate:[NSDate date]
-                                                fullZipPath:self.fullZipPath
-                                                 deltaPath:self.deltaPath
-                                           deltaFromVersion:self.versionNew
+                                                fullZipPath:self.newfullZipPathFileName
+                                                  deltaPath:self.deltaPath
+                                           deltaFromVersion:self.NewVersion
                                                  signature:zipSignature
                                             deltaSignature:deltaSignature
-                                                 outputPath:self.appcastPath];
+                                                 outputPath:self.appcastDir];
                     } else {
                         [self logMessage:@"❌ 生成 appcast.xml 失败：签名为空"];
                     }
@@ -397,19 +412,13 @@
 }
 
 - (void)logAllImportantPaths {
-    
-    self.docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    self.logFilePath = [self.docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
-    self.appcastPath = [self.docsDir stringByAppendingPathComponent:@"appcast.xml"];
-//    self.fullZipPath = [self->_updateAppPath stringByAppendingPathComponent:@"OStation.zip"];
-    self.deltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
-    self.sourceDeltaPath = [self->_docsDir stringByAppendingPathComponent:@"sparkle_patch/update.delta"];
+
     
     [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
-    [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastPath]];
-    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.fullZipPath]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaPath]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaPath]];
+    [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastDir]];
+    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.newfullZipPathFileName]];
+    [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaDir]];
+    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaDir]];
 }
 
 - (BOOL)verifySignatureUsingSignUpdate:(NSString *)filePath
@@ -448,6 +457,29 @@
     }
 }
 
+- (NSString *)createSubdirectory:(NSString *)subDirName inDirectory:(NSString *)parentDir {
+    if (!parentDir || !subDirName) return nil;
+
+    NSString *fullPath = [parentDir stringByAppendingPathComponent:subDirName];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+
+    if (![fileManager fileExistsAtPath:fullPath]) {
+        NSError *error = nil;
+        BOOL created = [fileManager createDirectoryAtPath:fullPath
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:&error];
+        if (!created) {
+            NSLog(@"❌ Failed to create directory %@: %@", fullPath, error.localizedDescription);
+            return nil;
+        }
+        NSLog(@"✅ Created directory: %@", fullPath);
+    } else {
+        NSLog(@"📂 Directory already exists: %@", fullPath);
+    }
+
+    return fullPath;
+}
 
 - (void)copyDeltaFromPath:(NSString *)sourceDeltaPath toDirectory:(NSString *)targetDir {
     NSFileManager *fileManager = [NSFileManager defaultManager];
