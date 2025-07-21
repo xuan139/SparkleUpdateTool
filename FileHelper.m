@@ -11,6 +11,46 @@
 @implementation FileHelper
 
 
++ (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    
+    // 获取文件名（不含路径）
+    NSString *fileName = [sourceFilePath lastPathComponent];
+    NSString *targetPath = [targetDir stringByAppendingPathComponent:fileName];
+    
+    // 如果目标文件存在，先删除
+    if ([fileManager fileExistsAtPath:targetPath]) {
+        [fileManager removeItemAtPath:targetPath error:nil];
+    }
+    
+    NSError *copyError = nil;
+    [fileManager copyItemAtPath:sourceFilePath toPath:targetPath error:&copyError];
+    if (copyError) {
+        NSLog(@"❌ 复制文件失败 %@ -> %@ 错误: %@", sourceFilePath, targetPath, copyError.localizedDescription);
+    } else {
+        NSLog(@"✅ 复制文件 %@ 到 %@", sourceFilePath, targetPath);
+    }
+}
+
++ (NSString *)generateSubdirectory:(NSString *)subDirName {
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
+
+    // 如果目录不存在则创建
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:fullPath]) {
+        NSError *error = nil;
+        [fileManager createDirectoryAtPath:fullPath
+               withIntermediateDirectories:YES
+                                attributes:nil
+                                     error:&error];
+        if (error) {
+            NSLog(@"❌ 创建目录失败: %@", error.localizedDescription);
+            return nil;
+        }
+    }
+    return fullPath;
+}
 
 + (NSString *)fullPathInDocuments:(NSString *)relativePath {
     NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];

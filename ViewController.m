@@ -19,17 +19,8 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-//    [SparkleHelper generateKeys];
-//    NSString *publicKey = [SparkleHelper getPublicKey];
-//    if (publicKey) {
-//        NSLog(@"✅ 公钥为: %@", publicKey);
-//    } else {
-//        NSLog(@"⚠️ 未能获取公钥");
-//    }
-
     [self setupUI];
     [self setupDir];
-
 }
 
 
@@ -97,7 +88,7 @@
 
     self.logTextView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
     [self.logTextView setEditable:NO];
-    [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:12]];
+    [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:13]];
     scrollView.documentView = self.logTextView;
     [self.view addSubview:scrollView];
     
@@ -108,7 +99,7 @@
 #pragma mark - setupDir
 
 - (void)setupDir{
-    _outputDir = [self generateSubdirectory:@"sparkle_output"];
+    _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
     _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
     _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
     _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
@@ -117,18 +108,14 @@
     [FileHelper prepareEmptyFileAtPath:_logFileDir];
     [FileHelper prepareEmptyFileAtPath:_appcastDir];
     
-    [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
-    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",   _deltaDir]];
-    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
-    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
-    
+    [self logAllImportantPaths];
 }
 
+
+
 #pragma mark - Button Actions
-
-
 - (void)selectOldApp {
- 
+
     _oldAppDir = [self openAppFromSubdirectory:@"sparkleOldApp"];
     if (_oldAppDir) {
         [self.oldAppPathField setStringValue:_oldAppDir];
@@ -161,41 +148,21 @@
 }
 
 /// 打开文件选择面板，限制只能选择 .app 文件
-- (NSString *)openAppSelectionPanel {
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
+//- (NSString *)openAppSelectionPanel {
+//    NSOpenPanel *panel = [NSOpenPanel openPanel];
+//
+//    panel.canChooseFiles = YES;
+//    panel.canChooseDirectories = NO;
+//    panel.allowsMultipleSelection = NO;
+//    
+//    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
+//
+//    if ([panel runModal] == NSModalResponseOK) {
+//        return panel.URL.path;
+//    }
+//    return nil;
+//}
 
-    panel.canChooseFiles = YES;
-    panel.canChooseDirectories = NO;
-    panel.allowsMultipleSelection = NO;
-    
-    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
-
-    if ([panel runModal] == NSModalResponseOK) {
-        return panel.URL.path;
-    }
-    return nil;
-}
-
-
-- (NSString *)generateSubdirectory:(NSString *)subDirName {
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
-
-    // 如果目录不存在则创建
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (![fileManager fileExistsAtPath:fullPath]) {
-        NSError *error = nil;
-        [fileManager createDirectoryAtPath:fullPath
-               withIntermediateDirectories:YES
-                                attributes:nil
-                                     error:&error];
-        if (error) {
-            NSLog(@"❌ 创建目录失败: %@", error.localizedDescription);
-            return nil;
-        }
-    }
-    return fullPath;
-}
 
 - (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -233,39 +200,31 @@
 - (void)generateUpdate {
     
     [self logMessage:@"Begin generate delte.update"];
-    
     [self logAllImportantPaths];
-    
-
     if (_oldAppDir.length == 0 || _NewAppDir.length == 0) {
         [self logMessage:@"❌ Choose old and new App Paths"];
         return;
     }
-    
     if (_deltaDir.length == 0) {
         [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
         return;
     }
-    
     // Step 1: Generate Patch
-
     BOOL success = [SparkleHelper createDeltaFromOldPath:_oldAppDir
                                                  toNewPath:_NewAppDir
                                                  outputPath:_deltaDir
                                                  logBlock:^(NSString *log) {
         // 这里可以打印日志或者更新 UI
-        NSLog(@"📣 %@", log);
+//        NSLog(@"📣 %@", log);
+        
+        [self logMessage:log];
     }];
     
     if (success) {
         [self logMessage:@"✅ success create delta.update copy to _outputDir"];
-        [self copyFileAtPath:_oldAppDir
-                            toDirectory:_outputDir];
-        [self copyFileAtPath:_NewAppDir
-                            toDirectory:_outputDir];
-        [self copyFileAtPath:_deltaDir
-                            toDirectory:_outputDir];
-
+        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
+        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
+        [FileHelper copyFileAtPath:_deltaDir toDirectory:_outputDir];
     } else {
         [self logMessage:@"❌ failed create delta.update"];
     }
@@ -282,89 +241,14 @@
 }
 
 - (void)logAllImportantPaths {
+    [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
+    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",   _deltaDir]];
+    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
+    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
     [self logMessage:[NSString stringWithFormat:@"📄 oldAppPath: %@", _oldAppDir]];
     [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 outputDir: %@", _outputDir]];
-    
-    [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastDir]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaDir]];
 }
 
-- (NSString *)createSubdirectory:(NSString *)subDirName inDirectory:(NSString *)parentDir {
-    if (!parentDir || !subDirName) return nil;
-
-    NSString *fullPath = [parentDir stringByAppendingPathComponent:subDirName];
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-
-    if (![fileManager fileExistsAtPath:fullPath]) {
-        NSError *error = nil;
-        BOOL created = [fileManager createDirectoryAtPath:fullPath
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:&error];
-        if (!created) {
-            NSLog(@"❌ Failed to create directory %@: %@", fullPath, error.localizedDescription);
-            return nil;
-        }
-        NSLog(@"✅ Created directory: %@", fullPath);
-    } else {
-        NSLog(@"📂 Directory already exists: %@", fullPath);
-    }
-
-    return fullPath;
-}
-
-
-- (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    // 获取文件名（不含路径）
-    NSString *fileName = [sourceFilePath lastPathComponent];
-    NSString *targetPath = [targetDir stringByAppendingPathComponent:fileName];
-    
-    // 如果目标文件存在，先删除
-    if ([fileManager fileExistsAtPath:targetPath]) {
-        [fileManager removeItemAtPath:targetPath error:nil];
-    }
-    
-    NSError *copyError = nil;
-    [fileManager copyItemAtPath:sourceFilePath toPath:targetPath error:&copyError];
-    if (copyError) {
-        NSLog(@"❌ 复制文件失败 %@ -> %@ 错误: %@", sourceFilePath, targetPath, copyError.localizedDescription);
-    } else {
-        NSLog(@"✅ 复制文件 %@ 到 %@", sourceFilePath, targetPath);
-    }
-}
-
-
-- (void)copyFilesFromDirectory:(NSString *)sourceDir toDirectory:(NSString *)targetDir {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-
-    // 直接尝试创建目标目录（如果已存在不会报错）
-    [fileManager createDirectoryAtPath:targetDir
-           withIntermediateDirectories:YES
-                            attributes:nil
-                                 error:nil];
-
-    NSArray *items = [fileManager contentsOfDirectoryAtPath:sourceDir error:nil];
-    for (NSString *item in items) {
-        NSString *sourcePath = [sourceDir stringByAppendingPathComponent:item];
-        NSString *targetPath = [targetDir stringByAppendingPathComponent:item];
-
-        BOOL isDir = NO;
-        [fileManager fileExistsAtPath:sourcePath isDirectory:&isDir];
-
-        if (!isDir) {
-            // 删除目标已有文件，忽略错误
-            [fileManager removeItemAtPath:targetPath error:nil];
-
-            // 复制文件，忽略错误
-            [fileManager copyItemAtPath:sourcePath toPath:targetPath error:nil];
-
-            [self logMessage:[NSString stringWithFormat:@"✅ 已复制文件: %@", item]];
-        }
-    }
-}
 
 
 
