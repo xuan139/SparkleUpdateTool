@@ -10,7 +10,9 @@
 
 @interface FileHelper : NSObject
 + (NSString *)fullPathInDocuments:(NSString *)relativePath;
-+ (NSString *)createDirectoryAtPath:(NSString *)directoryPath error:(NSError **)error;
++ (NSString *)createDirectoryIfNeededAtPath:(NSString *)directoryPath
+                                      error:(NSError **)error
+                                   logBlock:(void (^)(NSString *log))logBlock;
 + (BOOL)prepareEmptyFileAtPath:(NSString *)filePath;
 + (BOOL)copyAllFilesFromDirectory:(NSString *)sourceDir toDirectory:(NSString *)destDir error:(NSError **)error;
 

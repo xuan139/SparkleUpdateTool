@@ -15,14 +15,17 @@
 
 + (NSString *)getPublicKey;
 
-+ (BOOL)createDeltaFromOldPath:(NSString *)oldPath toNewPath:(NSString *)newPath outputPath:(NSString *)outputPath;
++ (BOOL)createDeltaFromOldPath:(NSString *)oldPath toNewPath:(NSString *)newPath outputPath:(NSString *)outputPath logBlock:(void (^)(NSString *log))logBlock;
 
 + (NSString *)signFileAtPath:(NSString *)path
                      withKey:(NSString *)privateKeyPath
-                    logBlock:(void (^)(NSString *log))logBlock;
+                     logBlock:(void (^)(NSString *log))logBlock;
 
 
-+ (BOOL)applyDelta:(NSString *)deltaPath toOldZip:(NSString *)oldZip outputPath:(NSString *)newAppPath;
++ (BOOL)applyDelta:(NSString *)deltaPath
+         toOldDir:(NSString *)oldDir
+         toNewDir:(NSString *)newDir
+         logBlock:(void (^)(NSString *log))logBlock;
 
 + (BOOL)verifyFileAtPath:(NSString *)path signature:(NSString *)sig publicKey:(NSString *)pubKeyPath;
 

@@ -88,8 +88,10 @@
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/usr/local/bin/binarydelta";
-    task.arguments = @[@"create", oldPath, newPath, outputPath];
+    task.arguments = @[@"create", @"--verbose", oldPath, newPath, outputPath];
 
+//    task.arguments = @[@"apply", @"--verbose", oldDir, newDir, deltaPath];
+    
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
     task.standardError = pipe;
@@ -115,37 +117,44 @@
 }
 
 
++ (BOOL)applyDelta:(NSString *)deltaPath
+         toOldDir:(NSString *)oldDir
+         toNewDir:(NSString *)newDir
+         logBlock:(void (^)(NSString *log))logBlock {
 
-+ (BOOL)applyDelta:(NSString *)deltaPath toOldZip:(NSString *)oldZip outputPath:(NSString *)newAppPath {
-    // 创建 NSTask
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/usr/local/bin/binarydelta";
-    task.arguments = @[@"apply", oldZip, deltaPath, newAppPath];
+    task.arguments = @[@"apply", @"--verbose", oldDir, newDir, deltaPath];
 
-    // 捕获输出
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
     task.standardError = pipe;
+
+    NSFileHandle *readHandle = [pipe fileHandleForReading];
 
     @try {
         [task launch];
         [task waitUntilExit];
     } @catch (NSException *exception) {
-        NSLog(@"❌ Failed to launch binarydelta apply: %@", exception.reason);
+        NSString *errorMsg = [NSString stringWithFormat:@"❌ Failed to launch binarydelta apply: %@", exception.reason];
+        if (logBlock) logBlock(errorMsg);
         return NO;
     }
 
-    NSData *outputData = [[pipe fileHandleForReading] readDataToEndOfFile];
+    NSData *outputData = [readHandle readDataToEndOfFile];
     NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+    
+    if (logBlock) logBlock(output);
 
     if (task.terminationStatus == 0) {
-        NSLog(@"✅ Applied delta successfully. Output at: %@", newAppPath);
+        if (logBlock) logBlock([NSString stringWithFormat:@"✅ 应用 delta 成功: %@", newDir]);
         return YES;
     } else {
-        NSLog(@"❌ Failed to apply delta.\n%@", output);
+        if (logBlock) logBlock([NSString stringWithFormat:@"❌ 应用 delta 失败\n%@", output]);
         return NO;
     }
 }
+
 
 + (NSString *)signFileAtPath:(NSString *)path
                      withKey:(NSString *)privateKeyPath

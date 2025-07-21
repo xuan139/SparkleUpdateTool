@@ -18,16 +18,42 @@
 }
 
 
-+ (NSString *)createDirectoryAtPath:(NSString *)directoryPath error:(NSError **)error {
++ (NSString *)createDirectoryIfNeededAtPath:(NSString *)directoryPath
+                                      error:(NSError **)error
+                                   logBlock:(void (^)(NSString *log))logBlock {
     NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm fileExistsAtPath:directoryPath]) {
-        BOOL success = [fm createDirectoryAtPath:directoryPath withIntermediateDirectories:YES attributes:nil error:error];
-        if (!success) {
-            return nil;
+    BOOL isDir = NO;
+
+    BOOL exists = [fm fileExistsAtPath:directoryPath isDirectory:&isDir];
+
+    if (exists) {
+        if (!isDir) {
+            // 已存在同名文件，删除它
+            if (![fm removeItemAtPath:directoryPath error:error]) {
+                if (logBlock) logBlock([NSString stringWithFormat:@"❌ 删除已有同名文件失败: %@", (*error).localizedDescription]);
+                return nil;
+            }
+            if (logBlock) logBlock(@"⚠️ 已存在同名文件，已删除");
+        } else {
+            if (logBlock) logBlock([NSString stringWithFormat:@"✅ 目录已存在: %@", directoryPath]);
+            return directoryPath;
         }
     }
-    return directoryPath; // 成功创建或已存在，返回路径
+
+    // 创建目录
+    BOOL success = [fm createDirectoryAtPath:directoryPath
+                  withIntermediateDirectories:YES
+                                   attributes:nil
+                                        error:error];
+    if (success) {
+        if (logBlock) logBlock([NSString stringWithFormat:@"✅ 创建目录成功: %@", directoryPath]);
+        return directoryPath;
+    } else {
+        if (logBlock) logBlock([NSString stringWithFormat:@"❌ 创建目录失败: %@", (*error).localizedDescription]);
+        return nil;
+    }
 }
+
 
 + (BOOL)prepareEmptyFileAtPath:(NSString *)filePath {
     NSFileManager *fm = [NSFileManager defaultManager];
