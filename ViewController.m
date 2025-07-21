@@ -298,28 +298,15 @@
         return;
     }
 
-    NSString *deltaDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/sparkle_patch"];
-    BOOL isDir = NO;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:deltaDir isDirectory:&isDir] || !isDir) {
-        NSError *mkdirErr = nil;
-        [[NSFileManager defaultManager] createDirectoryAtPath:deltaDir withIntermediateDirectories:YES attributes:nil error:&mkdirErr];
-        if (mkdirErr) {
-            [self logMessage:[NSString stringWithFormat:@"❌ 创建目录失败: %@", mkdirErr.localizedDescription]];
-            return;
-        }
-    }
 
-    _deltaPath = [deltaDir stringByAppendingPathComponent:@"update.delta"];
     
-    [self logMessage:[NSString stringWithFormat:@"✅ _deltaDir: %@", deltaDir]];
+    [self logMessage:[NSString stringWithFormat:@"✅ _deltaDir: %@", _deltaDir]];
     [self logMessage:[NSString stringWithFormat:@"✅ use binarydelta: %@", binaryDeltaPath]];
-    [self logMessage:[NSString stringWithFormat:@"✅ use deltaPath: %@", _deltaPath]];
-    
     [self logMessage:@"call Sparkle binarydelta to generate delta..."];
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = binaryDeltaPath;
-    task.arguments = @[ @"create", oldPath, newPath, _deltaPath ]; // ✅ 使用 deltaPath 而不是目录
+    task.arguments = @[ @"create", oldPath, newPath, _deltaDir ]; // ✅ 使用 deltaPath 而不是目录
 
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
@@ -333,22 +320,22 @@
 
         dispatch_async(dispatch_get_main_queue(), ^{
 //            [self logMessage:output];
-            if ([[NSFileManager defaultManager] fileExistsAtPath:self->_deltaPath]) {
+            if ([[NSFileManager defaultManager] fileExistsAtPath:self->_deltaDir]) {
                 [self logMessage:@"✅ finish generate delta"];
                 // ✅ 你也可以在这里调用签名方法，例如：
 
-                [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", self->_deltaPath]];
-                [self logAllImportantPaths];
+                [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", self->_deltaDir]];
+//                [self logAllImportantPaths];
                 
                 [self signZipAndDeltaWithZipPath:self.newfullZipPathFileName
-                                       deltaPath:self.deltaPath
+                                       deltaPath:self.deltaDir
                                       completion:^(NSString *zipSignature, NSString *deltaSignature) {
                     if (zipSignature && deltaSignature) {
                         [self generateAppcastXMLWithVersion:self->_oldVersion
                                                shortVersion:self->_oldBuildVersion
                                                    pubDate:[NSDate date]
                                                 fullZipPath:self.newfullZipPathFileName
-                                                  deltaPath:self.deltaPath
+                                                  deltaPath:self.deltaDir
                                            deltaFromVersion:self.NewVersion
                                                  signature:zipSignature
                                             deltaSignature:deltaSignature
@@ -376,6 +363,8 @@
             if (completion) completion(nil, nil);
             return;
         }
+        [self logMessage:@"✅ ZIP 签名 成功"];
+        [self logMessage:zipSignature];
 
         [self signUpdateAtPath:deltaPath completion:^(NSString *deltaSignature) {
             if (!deltaSignature) {
@@ -383,6 +372,9 @@
                 if (completion) completion(nil, nil);
                 return;
             }
+            
+            [self logMessage:@"✅ DELTA 签名 成功"];
+            [self logMessage:deltaSignature];
 
             [self logMessage:@"✅ ZIP 和 DELTA 签名完成"];
             if (completion) completion(zipSignature, deltaSignature);
@@ -393,16 +385,6 @@
 - (void)writeAppcastXML:(NSString *)xml toPath:(NSString *)appcastPath {
 
     NSError *writeError = nil;
-    
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.dateFormat = @"yyyy-MM-dd_HH-mm-ss";
-    NSString *timestamp = [formatter stringFromDate:[NSDate date]];
-
-    NSString *fileName = [NSString stringWithFormat:@"appcast_%@.xml", timestamp];
-
-    // 最终 appcast 路径
-    appcastPath = [_docsDir stringByAppendingPathComponent:fileName];
-    
     BOOL success = [xml writeToFile:appcastPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
     if (!success || writeError) {
         [self logMessage:[NSString stringWithFormat:@"❌ 写入 appcast.xml 失败: %@", writeError.localizedDescription]];
@@ -414,11 +396,11 @@
 - (void)logAllImportantPaths {
 
     
-    [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
+//    [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
     [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastDir]];
     [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.newfullZipPathFileName]];
     [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaDir]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaDir]];
+//    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaDir]];
 }
 
 - (BOOL)verifySignatureUsingSignUpdate:(NSString *)filePath
