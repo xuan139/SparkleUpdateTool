@@ -17,9 +17,13 @@
 
 + (BOOL)createDeltaFromOldPath:(NSString *)oldPath toNewPath:(NSString *)newPath outputPath:(NSString *)outputPath;
 
++ (NSString *)signFileAtPath:(NSString *)path
+                     withKey:(NSString *)privateKeyPath
+                    logBlock:(void (^)(NSString *log))logBlock;
+
+
 + (BOOL)applyDelta:(NSString *)deltaPath toOldZip:(NSString *)oldZip outputPath:(NSString *)newAppPath;
 
-+ (NSString *)signFileAtPath:(NSString *)path withKey:(NSString *)privateKeyPath;
 + (BOOL)verifyFileAtPath:(NSString *)path signature:(NSString *)sig publicKey:(NSString *)pubKeyPath;
 
 

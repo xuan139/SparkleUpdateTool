@@ -26,37 +26,12 @@
 //    } else {
 //        NSLog(@"⚠️ 未能获取公钥");
 //    }
-//    [self setupUI];
-    
+
     [self setupUI];
     [self setupDir];
 
 }
-- (void)setupDir{
 
-    NSString *sparkleOutPutDir = [FileHelper fullPathInDocuments:@"sparkle_output"];
-    
-    NSError *error = nil;
-    _outputDir = [FileHelper createDirectoryAtPath:sparkleOutPutDir error:&error];
-    
-    _deltaDir = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
-    [FileHelper prepareEmptyFileAtPath:_deltaDir];
-    
-    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
-    [FileHelper prepareEmptyFileAtPath:_logFileDir];
-    
-    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
-    [FileHelper prepareEmptyFileAtPath:_appcastDir];
-    
-
-    [self logMessage:[NSString stringWithFormat:@"outputDir: %@", _outputDir]];
-    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",  _deltaDir]];
-    
-    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
-    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
-    
-    
-}
 
 #pragma mark - setupUI
 - (void)setupUI {
@@ -135,6 +110,26 @@
 
 
 }
+#pragma mark - setupDir
+
+- (void)setupDir{
+    
+    _outputDir = [FileHelper fullPathInDocuments:@"sparkle_output/readme.md"];
+    _deltaDir  = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
+    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
+    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
+    
+    [FileHelper prepareEmptyFileAtPath:_outputDir];
+    [FileHelper prepareEmptyFileAtPath:_deltaDir];
+    [FileHelper prepareEmptyFileAtPath:_logFileDir];
+    [FileHelper prepareEmptyFileAtPath:_appcastDir];
+    
+    [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
+    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",   _deltaDir]];
+    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
+    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
+    
+}
 
 #pragma mark - Button Actions
 
@@ -151,9 +146,10 @@
             _oldBuildVersion = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 OLD 版本号: %@ (Build: %@)", _oldVersion, _oldBuildVersion]];
         }
-
-        _oldfullZipPathFileName = [self zipAppAtPath:_oldAppDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip old App: %@", _oldfullZipPathFileName]];
+        _oldfullZipPathFileName = [FileHelper zipAppAtPath:_oldAppDir logBlock:^(NSString *msg) {
+            [self logMessage:msg]; // ✅ 使用 ViewController 的日志方法
+        }];
+        [self logMessage:[NSString stringWithFormat:@"✅ FileHelper zip new App: %@", _oldfullZipPathFileName]];
     }
 }
 
@@ -171,55 +167,13 @@
             _NewBuildVersion = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 NEW 版本号: %@ (Build: %@)", _NewVersion, _NewBuildVersion]];
         }
-        _newfullZipPathFileName = [self zipAppAtPath:_NewAppDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ zip new App: %@", _newfullZipPathFileName]];
-    }
-}
-
-
-- (NSString *)zipAppAtPath:(NSString *)appPath {
-    if (![[NSFileManager defaultManager] fileExistsAtPath:appPath]) {
-        [self logMessage:@"❌ 要压缩的 .app 文件不存在"];
-        return nil;
-    }
-
-    NSString *appName = [[appPath lastPathComponent] stringByDeletingPathExtension];
-    NSString *appDirectory = [appPath stringByDeletingLastPathComponent];
-    NSString *zipPath = [appDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", appName]];
-
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/zip";
-    task.currentDirectoryPath = appDirectory; // 必须设置为 .app 所在目录
-    task.arguments = @[@"-r", zipPath, [appPath lastPathComponent]];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = pipe;
-
-    NSFileHandle *readHandle = [pipe fileHandleForReading];
-
-    [self logMessage:[NSString stringWithFormat:@"📦 开始压缩 %@ → %@", appPath, zipPath]];
-    
-    task.terminationHandler = ^(NSTask *finishedTask) {
-        NSData *outputData = [readHandle readDataToEndOfFile];
-        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+        _newfullZipPathFileName = [FileHelper zipAppAtPath:_NewAppDir logBlock:^(NSString *msg) {
+            [self logMessage:msg]; // ✅ 使用 ViewController 的日志方法
+        }];
+        [self logMessage:[NSString stringWithFormat:@"✅ FileHelper zip new App: %@", _newfullZipPathFileName]];
         
-        dispatch_async(dispatch_get_main_queue(), ^{
-//            [self logMessage:output];
-            if (finishedTask.terminationStatus == 0) {
-                [self logMessage:@"✅ 压缩完成"];
-            } else {
-                [self logMessage:@"❌ 压缩失败"];
-            }
-        });
-    };
-
-    [task launch];
-
-    return zipPath;
+    }
 }
-
-
 
 /// 打开文件选择面板，限制只能选择 .app 文件
 - (NSString *)openAppSelectionPanel {
@@ -298,9 +252,6 @@
         return;
     }
 
-
-    
-    [self logMessage:[NSString stringWithFormat:@"✅ _deltaDir: %@", _deltaDir]];
     [self logMessage:[NSString stringWithFormat:@"✅ use binarydelta: %@", binaryDeltaPath]];
     [self logMessage:@"call Sparkle binarydelta to generate delta..."];
 
@@ -317,13 +268,11 @@
     task.terminationHandler = ^(NSTask *finishedTask) {
         NSData *outputData = [readHandle readDataToEndOfFile];
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-
+        [self logMessage:output];
         dispatch_async(dispatch_get_main_queue(), ^{
-//            [self logMessage:output];
             if ([[NSFileManager defaultManager] fileExistsAtPath:self->_deltaDir]) {
                 [self logMessage:@"✅ finish generate delta"];
                 // ✅ 你也可以在这里调用签名方法，例如：
-
                 [self logMessage:[NSString stringWithFormat:@"✅ begin generate signUpdate at : %@", self->_deltaDir]];
 //                [self logAllImportantPaths];
                 
@@ -359,24 +308,24 @@
                          completion:(void (^)(NSString *zipSignature, NSString *deltaSignature))completion{
     [self signUpdateAtPath:zipPath completion:^(NSString *zipSignature) {
         if (!zipSignature) {
-            [self logMessage:@"❌ ZIP 签名失败"];
+            [self logMessage:@"❌ zipSignature failed"];
             if (completion) completion(nil, nil);
             return;
         }
-        [self logMessage:@"✅ ZIP 签名 成功"];
+        [self logMessage:@"✅ zipSignature success"];
         [self logMessage:zipSignature];
 
         [self signUpdateAtPath:deltaPath completion:^(NSString *deltaSignature) {
             if (!deltaSignature) {
-                [self logMessage:@"❌ DELTA 签名失败"];
+                [self logMessage:@"❌ deltaSignature failed"];
                 if (completion) completion(nil, nil);
                 return;
             }
             
-            [self logMessage:@"✅ DELTA 签名 成功"];
+            [self logMessage:@"✅ deltaSignature success"];
             [self logMessage:deltaSignature];
 
-            [self logMessage:@"✅ ZIP 和 DELTA 签名完成"];
+            [self logMessage:@"✅ ZIP DELTA Signature all done "];
             if (completion) completion(zipSignature, deltaSignature);
         }];
     }];
@@ -387,20 +336,17 @@
     NSError *writeError = nil;
     BOOL success = [xml writeToFile:appcastPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
     if (!success || writeError) {
-        [self logMessage:[NSString stringWithFormat:@"❌ 写入 appcast.xml 失败: %@", writeError.localizedDescription]];
+        [self logMessage:[NSString stringWithFormat:@"❌ write appcast.xml feiled: %@", writeError.localizedDescription]];
     } else {
-        [self logMessage:[NSString stringWithFormat:@"📄 成功写入 appcast.xml: %@", appcastPath]];
+        [self logMessage:[NSString stringWithFormat:@"📄 write appcast.xml: %@", appcastPath]];
     }
 }
 
 - (void)logAllImportantPaths {
-
-    
-//    [self logMessage:[NSString stringWithFormat:@"📄 docsDir: %@", self.docsDir]];
     [self logMessage:[NSString stringWithFormat:@"📄 Appcast Path: %@", self.appcastDir]];
-    [self logMessage:[NSString stringWithFormat:@"📦 Full ZIP Path: %@", self.newfullZipPathFileName]];
+    [self logMessage:[NSString stringWithFormat:@"📦 Full New ZIP Path: %@", self.newfullZipPathFileName]];
+    [self logMessage:[NSString stringWithFormat:@"📦 Full Old ZIP Path: %@", self.oldfullZipPathFileName]];
     [self logMessage:[NSString stringWithFormat:@"🧩 Delta Path: %@", self.deltaDir]];
-//    [self logMessage:[NSString stringWithFormat:@"🧩 sourceDeltaPath: %@", self.sourceDeltaDir]];
 }
 
 - (BOOL)verifySignatureUsingSignUpdate:(NSString *)filePath
@@ -474,7 +420,7 @@
                                 attributes:nil
                                      error:&dirError];
         if (dirError) {
-            [self logMessage:[NSString stringWithFormat:@"❌ 创建目录失败: %@", dirError.localizedDescription]];
+            [self logMessage:[NSString stringWithFormat:@"❌ create directory: %@", dirError.localizedDescription]];
             return;
         }
     }
@@ -492,9 +438,9 @@
     [fileManager copyItemAtPath:sourceDeltaPath toPath:targetPath error:&copyError];
     
     if (copyError) {
-        [self logMessage:[NSString stringWithFormat:@"❌ 拷贝 delta 文件失败: %@", copyError.localizedDescription]];
+        [self logMessage:[NSString stringWithFormat:@"❌ copy delta failed: %@", copyError.localizedDescription]];
     } else {
-        [self logMessage:[NSString stringWithFormat:@"✅ 已将 update.delta 拷贝到 %@", targetDir]];
+        [self logMessage:[NSString stringWithFormat:@"✅ already update.delta copy to  %@", targetDir]];
     }
 }
 
@@ -503,7 +449,7 @@
     NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
 
     if (!infoPlist) {
-        [self logMessage:[NSString stringWithFormat:@"❌ 无法读取 Info.plist: %@", infoPlistPath]];
+        [self logMessage:[NSString stringWithFormat:@"❌ cannot read Info.plist: %@", infoPlistPath]];
         return nil;
     }
 
@@ -516,19 +462,20 @@
     };
 }
 
-
-
 - (void)signUpdateAtPath:(NSString *)deltaPath completion:(void (^)(NSString *signature))completion {
     NSString *signToolPath = @"/usr/local/bin/sign_update";
 
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:signToolPath]) {
-        [self logMessage:@"❌ 找不到 sign_update 工具，请确认路径正确"];
+        [self logMessage:@"❌ can't sign_update tool"];
         if (completion) completion(nil);
         return;
     }
+    
+
+
 
     if (![[NSFileManager defaultManager] fileExistsAtPath:deltaPath]) {
-        [self logMessage:@"❌ 找不到要签名的 delta 更新文件"];
+        [self logMessage:@"❌ can't find delta file"];
         if (completion) completion(nil);
         return;
     }
@@ -554,7 +501,7 @@
             NSError *regexError = nil;
             NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"edSignature=\"([^\"]+)\"" options:0 error:&regexError];
             if (regexError) {
-                [self logMessage:[NSString stringWithFormat:@"❌ 正则解析错误: %@", regexError.localizedDescription]];
+                [self logMessage:[NSString stringWithFormat:@"❌ reg failed: %@", regexError.localizedDescription]];
                 if (completion) completion(nil);
                 return;
             }
@@ -565,7 +512,7 @@
 //                [self logMessage:[NSString stringWithFormat:@"✍️ 提取到签名: %@", signature]];
                 if (completion) completion(signature);
             } else {
-                [self logMessage:@"❌ 未找到签名"];
+                [self logMessage:@"❌ can't find signature"];
                 if (completion) completion(nil);
             }
         });
@@ -653,7 +600,7 @@
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self logMessage:@"🚀 上传完成"];
+            [self logMessage:@"🚀 upload done"];
             [self logMessage:output];
         });
     };
@@ -679,15 +626,15 @@
         NSRange bottom = NSMakeRange(updatedText.length, 0);
         [self.logTextView scrollRangeToVisible:bottom];
 
-        // 3. 写入日志文件（追加）
-        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-        NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
+//        // 3. 写入日志文件（追加）
+//        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+//        NSString *logFilePath = [docsDir stringByAppendingPathComponent:@"sparkle_log.txt"];
 
-        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFilePath];
+        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:self->_logFileDir];
         if (!fileHandle) {
             // 文件不存在则创建
-            [[NSFileManager defaultManager] createFileAtPath:logFilePath contents:nil attributes:nil];
-            fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFilePath];
+            [[NSFileManager defaultManager] createFileAtPath:self->_logFileDir contents:nil attributes:nil];
+            fileHandle = [NSFileHandle fileHandleForWritingAtPath:self->_logFileDir];
         }
 
         if (fileHandle) {
@@ -699,23 +646,21 @@
     });
 }
 
-
-
-- (NSString *)findSparkleCLIPath {
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/which";
-    task.arguments = @[@"sparkle"];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-
-    NSFileHandle *file = pipe.fileHandleForReading;
-    [task launch];
-    [task waitUntilExit];
-
-    NSData *data = [file readDataToEndOfFile];
-    NSString *path = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    return [path stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-}
+//- (NSString *)findSparkleCLIPath {
+//    NSTask *task = [[NSTask alloc] init];
+//    task.launchPath = @"/usr/bin/which";
+//    task.arguments = @[@"sparkle"];
+//
+//    NSPipe *pipe = [NSPipe pipe];
+//    task.standardOutput = pipe;
+//
+//    NSFileHandle *file = pipe.fileHandleForReading;
+//    [task launch];
+//    [task waitUntilExit];
+//
+//    NSData *data = [file readDataToEndOfFile];
+//    NSString *path = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+//    return [path stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+//}
 
 @end

@@ -14,4 +14,5 @@
 + (BOOL)prepareEmptyFileAtPath:(NSString *)filePath;
 + (BOOL)copyAllFilesFromDirectory:(NSString *)sourceDir toDirectory:(NSString *)destDir error:(NSError **)error;
 
++ (NSString *)zipAppAtPath:(NSString *)appPath logBlock:(void (^)(NSString *message))logBlock;
 @end

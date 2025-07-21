@@ -32,6 +32,7 @@
 @property (nonatomic, strong) NSString *NewAppDir;
 
 // 关键文件路径
+
 @property (nonatomic, strong) NSString *oldfullZipPathFileName;
 @property (nonatomic, strong) NSString *newfullZipPathFileName;
 @property (nonatomic, strong) NSString *deltaDir;

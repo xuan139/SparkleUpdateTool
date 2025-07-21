@@ -95,5 +95,48 @@
     return YES;
 }
 
++ (NSString *)zipAppAtPath:(NSString *)appPath logBlock:(void (^)(NSString *message))logBlock {
+    if (![[NSFileManager defaultManager] fileExistsAtPath:appPath]) {
+        logBlock(@"❌ 要压缩的 .app 文件不存在");
+        return nil;
+    }
+
+    NSString *appName = [[appPath lastPathComponent] stringByDeletingPathExtension];
+    NSString *appDirectory = [appPath stringByDeletingLastPathComponent];
+    NSString *zipPath = [appDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", appName]];
+
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/usr/bin/zip";
+    task.currentDirectoryPath = appDirectory;
+    task.arguments = @[@"-r", zipPath, [appPath lastPathComponent]];
+
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    task.standardError = pipe;
+    NSFileHandle *readHandle = [pipe fileHandleForReading];
+
+    logBlock([NSString stringWithFormat:@"📦 开始压缩 %@ → %@", appPath, zipPath]);
+
+    task.terminationHandler = ^(NSTask *finishedTask) {
+        NSData *outputData = [readHandle readDataToEndOfFile];
+        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // 可选：打印 zip 命令输出
+            // logBlock(output);
+
+            if (finishedTask.terminationStatus == 0) {
+                logBlock(@"✅ 压缩完成");
+            } else {
+                logBlock(@"❌ 压缩失败");
+            }
+        });
+    };
+
+    [task launch];
+
+    return zipPath;
+}
 
 @end
+

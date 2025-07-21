@@ -83,12 +83,13 @@
 
 + (BOOL)createDeltaFromOldPath:(NSString *)oldPath
                      toNewPath:(NSString *)newPath
-                    outputPath:(NSString *)outputPath {
+                    outputPath:(NSString *)outputPath
+                      logBlock:(void (^)(NSString *log))logBlock {
+
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/usr/local/bin/binarydelta";
     task.arguments = @[@"create", oldPath, newPath, outputPath];
 
-    // 捕获输出
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
     task.standardError = pipe;
@@ -97,7 +98,7 @@
         [task launch];
         [task waitUntilExit];
     } @catch (NSException *exception) {
-        NSLog(@"❌ Failed to launch binarydelta create: %@", exception.reason);
+        logBlock([NSString stringWithFormat:@"❌ Failed to launch binarydelta: %@", exception.reason]);
         return NO;
     }
 
@@ -105,13 +106,14 @@
     NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
 
     if (task.terminationStatus == 0) {
-        NSLog(@"✅ Delta created successfully at: %@", outputPath);
+        logBlock([NSString stringWithFormat:@"✅ Delta created successfully at: %@", outputPath]);
         return YES;
     } else {
-        NSLog(@"❌ Failed to create delta.\n%@", output);
+        logBlock([NSString stringWithFormat:@"❌ Failed to create delta.\n%@", output]);
         return NO;
     }
 }
+
 
 
 + (BOOL)applyDelta:(NSString *)deltaPath toOldZip:(NSString *)oldZip outputPath:(NSString *)newAppPath {
@@ -145,7 +147,10 @@
     }
 }
 
-+ (NSString *)signFileAtPath:(NSString *)path withKey:(NSString *)privateKeyPath {
++ (NSString *)signFileAtPath:(NSString *)path
+                     withKey:(NSString *)privateKeyPath
+                    logBlock:(void (^)(NSString *log))logBlock {
+
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/usr/local/bin/sign_update";
     task.arguments = @[ @"sign", path, privateKeyPath ];
@@ -158,7 +163,7 @@
         [task launch];
         [task waitUntilExit];
     } @catch (NSException *exception) {
-        NSLog(@"❌ Failed to launch sign_update: %@", exception.reason);
+        logBlock([NSString stringWithFormat:@"❌ Failed to launch sign_update: %@", exception.reason]);
         return nil;
     }
 
@@ -169,21 +174,20 @@
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"Signature: ([^\\s]+)" options:0 error:&error];
     if (error) {
-        NSLog(@"❌ Regex error: %@", error.localizedDescription);
+        logBlock([NSString stringWithFormat:@"❌ Regex error: %@", error.localizedDescription]);
         return nil;
     }
 
     NSTextCheckingResult *match = [regex firstMatchInString:output options:0 range:NSMakeRange(0, output.length)];
     if (match && [match numberOfRanges] > 1) {
         NSString *signature = [output substringWithRange:[match rangeAtIndex:1]];
-        NSLog(@"🔐 Signature: %@", signature);
+        logBlock([NSString stringWithFormat:@"🔐 Signature: %@", signature]);
         return signature;
     } else {
-        NSLog(@"❌ Signature not found in output:\n%@", output);
+        logBlock([NSString stringWithFormat:@"❌ Signature not found in output:\n%@", output]);
         return nil;
     }
 }
-
 
 + (BOOL)verifyFileAtPath:(NSString *)path signature:(NSString *)sig publicKey:(NSString *)pubKeyPath {
     NSTask *task = [[NSTask alloc] init];
