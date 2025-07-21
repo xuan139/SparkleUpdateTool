@@ -3,7 +3,8 @@
 # Fork and Clone  
 https://github.com/sparkle-project/Sparkle.git
 
-# Build Release  
+# Build Release  Version4.1
+
 - Copy `binarydelta` from the `Release` folder to `/usr/local/bin/binarydelta`  
 - Copy `sign_update` from the `Release` folder to `/usr/local/bin/sign_update`  
 - Copy `generate_keys` from:  
