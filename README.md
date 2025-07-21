@@ -27,7 +27,7 @@ A pre-existing signing key was found. This is how it should appear in your Info.
 ```
 
 
-## Step 2:  
+## Step 2:   binarydelta create
 
 ### Must Have
 binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
@@ -84,13 +84,13 @@ Sample `appcast.xml` structure:
 </rss>
 ```
 
-## Step 4:  
+## Step 4:  Way of Uodater
 - The app must periodically check the remote `appcast.xml`.  
 
 - or check manually inside Updater App 
 
 
-## Step 5:  
+## Step 5:  binarydelta apply
 binarydelta apply OStation.app NewStation.app update.delta --verbose
 Applying version 4.1 patch...
 Verifying source...
@@ -119,15 +119,16 @@ Done!
 ```mermaid
 graph TD
   A[generate_keys] --> B[Build New App]
-  B --> C[zip App]
-  C --> D[sign zip]
-  B --> E[binarydelta create]
+  B --> C[ App ]
+  C --> D[ sign App]
+  B --> E[binarydelta create update.delta]
   E --> F[sign delta]
   D & F --> G[Generate appcast.xml]
   G --> H[Upload files to server]
   H --> I[App auto-check updates]
   I --> J[Verify signatures]
-  J --> K[Apply ZIP or delta update]
+  J --> K[binarydelta Apply oldApp newApp and delta.update]
+  
 ```
 ## 新建一个app 用于版本控制和所有app的历史记录，所有app 历史记录
 ## 待测试 所有的游戏平台 和ostation
