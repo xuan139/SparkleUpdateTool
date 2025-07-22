@@ -318,7 +318,7 @@
             appBaseURL = [appBaseURL stringByAppendingString:@"/"];
         }
     
-
+//
     // 获取文件大小
     unsigned long long fullSize  = fullAppPath ? [FileHelper fileSizeAtPath:fullAppPath] : 0 ;
     unsigned long long deltaSize = deltaFilePath ? [FileHelper fileSizeAtPath:deltaFilePath] : 0;
