@@ -360,7 +360,9 @@
     [self writeAppcastXML:xml toPath:xmlOutputPath];
     
     NSDictionary *result = [self parseAppcastXMLFromPath:_appcastDir];
-    NSLog(@"%@", result);
+//    NSLog(@"%@", result);
+    
+    [self logMessage:[NSString stringWithFormat:@" result of  %@", result]];
     
 }
 
