@@ -10,6 +10,30 @@
 
 @implementation FileHelper
 
++ (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
+                                   logBlock:(void (^)(NSString *msg))logBlock {
+    NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
+    NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
+
+    if (!infoPlist) {
+        if (logBlock) {
+            logBlock([NSString stringWithFormat:@"❌ cannot read Info.plist: %@", infoPlistPath]);
+        }
+        return nil;
+    }
+
+    logBlock([NSString stringWithFormat:@"✅read Info.plist: %@", infoPlistPath]);
+
+    
+    NSString *version = infoPlist[@"CFBundleShortVersionString"] ?: @"";
+    NSString *build = infoPlist[@"CFBundleVersion"] ?: @"";
+
+    return @{
+        @"version": version,
+        @"build": build
+    };
+}
+
 
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath {
     NSFileManager *fileManager = [NSFileManager defaultManager];

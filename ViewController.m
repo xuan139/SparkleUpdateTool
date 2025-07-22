@@ -10,6 +10,7 @@
 #import "SparkleHelper.h"
 #import "FileHelper.h"
 #import "AppcastGenerator.h"
+#import "UIHelper.h"
 
 @implementation ViewController
 
@@ -25,78 +26,150 @@
 }
 
 
-#pragma mark - setupUI
 - (void)setupUI {
+    CGFloat baseY = 440;
+    CGFloat spacingY = 50;
+    
+    CGFloat padding = 20;
+
+    [self setupAppSelectorWithLabel:@"old App:"
+                              action:@selector(selectOldApp)
+                          yPosition:baseY
+                              isOld:YES];
+
+    [self setupAppSelectorWithLabel:@"new App:"
+                              action:@selector(selectUpdatedApp)
+                          yPosition:baseY - spacingY
+                              isOld:NO];
+
+    [self setupGenerateButtonAtY:baseY - spacingY * 2];
+    
+    NSTextView *logTextView;
+    NSScrollView *logScrollView = [UIHelper createLogTextViewWithFrame:NSMakeRect(20, 20, 600, 300)
+                                                              textView:&logTextView];
+    self.logTextView = logTextView;
+    [self.view addSubview:logScrollView];
+    self.logTextView.font = [NSFont systemFontOfSize:14];
+    [self logMessage:@"logging"];
+}
+
+- (void)setupAppSelectorWithLabel:(NSString *)labelText
+                           action:(SEL)selector
+                         yPosition:(CGFloat)y
+                            isOld:(BOOL)isOld {
     CGFloat padding = 20;
     CGFloat labelWidth = 100;
     CGFloat fieldWidth = 400;
     CGFloat buttonWidth = 130;
     CGFloat height = 24;
 
-    // 旧版 App 标签
-    self.oldAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 440, labelWidth, height)];
-    [self.oldAppLabel setStringValue:@"old App:"];
-    [self.oldAppLabel setBezeled:NO];
-    [self.oldAppLabel setDrawsBackground:NO];
-    [self.oldAppLabel setEditable:NO];
-    [self.oldAppLabel setSelectable:NO];
-    [self.view addSubview:self.oldAppLabel];
+    NSTextField *label = [UIHelper createLabelWithText:labelText
+                                                 frame:NSMakeRect(padding, y, labelWidth, height)];
+    [self.view addSubview:label];
 
-    // 旧版 App 路径显示框（只读）
-    self.oldAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 440, fieldWidth, height)];
-    [self.oldAppPathField setEditable:NO];
-    [self.view addSubview:self.oldAppPathField];
+    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
+    [self.view addSubview:field];
 
-    // 旧版 App 选择按钮
-    self.oldAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 435, buttonWidth, 30)];
-    [self.oldAppSelectButton setTitle:@"choose old App"];
-    [self.oldAppSelectButton setTarget:self];
-    [self.oldAppSelectButton setAction:@selector(selectOldApp)];
-    [self.view addSubview:self.oldAppSelectButton];
+    NSString *buttonTitle = [NSString stringWithFormat:@"choose %@", labelText];
+    NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
+                                                 target:self
+                                                 action:selector
+                                                  frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
+    [self.view addSubview:button];
 
-    // 新版 App 标签
-    self.updatedAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 390, labelWidth, height)];
-    [self.updatedAppLabel setStringValue:@"new App:"];
-    [self.updatedAppLabel setBezeled:NO];
-    [self.updatedAppLabel setDrawsBackground:NO];
-    [self.updatedAppLabel setEditable:NO];
-    [self.updatedAppLabel setSelectable:NO];
-    [self.view addSubview:self.updatedAppLabel];
-
-    // 新版 App 路径显示框（只读）
-    self.updatedAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 390, fieldWidth, height)];
-    [self.updatedAppPathField setEditable:NO];
-    [self.view addSubview:self.updatedAppPathField];
-
-    // 新版 App 选择按钮
-    self.updatedAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 385, buttonWidth, 30)];
-    [self.updatedAppSelectButton setTitle:@"choose new App"];
-    [self.updatedAppSelectButton setTarget:self];
-    [self.updatedAppSelectButton setAction:@selector(selectUpdatedApp)];
-    [self.view addSubview:self.updatedAppSelectButton];
-
-    // 生成增量更新按钮
-    self.generateUpdateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, 340, 160, 30)];
-    [self.generateUpdateButton setTitle:@"generate delta"];
-    [self.generateUpdateButton setTarget:self];
-    [self.generateUpdateButton setAction:@selector(generateUpdate)];
-    [self.view addSubview:self.generateUpdateButton];
-
-    // 日志显示框（NSTextView 放在 NSScrollView 中）
-    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, 20, self.view.bounds.size.width - padding * 2, 300)];
-    scrollView.hasVerticalScroller = YES;
-    scrollView.borderType = NSBezelBorder;
-
-    self.logTextView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
-    [self.logTextView setEditable:NO];
-    [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:13]];
-    scrollView.documentView = self.logTextView;
-    [self.view addSubview:scrollView];
-    
-    self.logTextView.font = [NSFont systemFontOfSize:14];
-    
-    [self logMessage:@"logging"];
+    if (isOld) {
+        self.oldAppLabel = label;
+        self.oldAppPathField = field;
+        self.oldAppSelectButton = button;
+    } else {
+        self.updatedAppLabel = label;
+        self.updatedAppPathField = field;
+        self.updatedAppSelectButton = button;
+    }
 }
+
+- (void)setupGenerateButtonAtY:(CGFloat)y {
+    CGFloat padding = 20;
+    self.generateUpdateButton = [UIHelper createButtonWithTitle:@"generate delta"
+                                                         target:self
+                                                         action:@selector(generateUpdate)
+                                                          frame:NSMakeRect(padding, y, 160, 30)];
+    [self.view addSubview:self.generateUpdateButton];
+}
+
+
+//#pragma mark - setupUI
+//- (void)setupUI {
+//    CGFloat padding = 20;
+//    CGFloat labelWidth = 100;
+//    CGFloat fieldWidth = 400;
+//    CGFloat buttonWidth = 130;
+//    CGFloat height = 24;
+//
+//    // 旧版 App 标签
+//    self.oldAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 440, labelWidth, height)];
+//    [self.oldAppLabel setStringValue:@"old App:"];
+//    [self.oldAppLabel setBezeled:NO];
+//    [self.oldAppLabel setDrawsBackground:NO];
+//    [self.oldAppLabel setEditable:NO];
+//    [self.oldAppLabel setSelectable:NO];
+//    [self.view addSubview:self.oldAppLabel];
+//
+//    // 旧版 App 路径显示框（只读）
+//    self.oldAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 440, fieldWidth, height)];
+//    [self.oldAppPathField setEditable:NO];
+//    [self.view addSubview:self.oldAppPathField];
+//
+//    // 旧版 App 选择按钮
+//    self.oldAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 435, buttonWidth, 30)];
+//    [self.oldAppSelectButton setTitle:@"choose old App"];
+//    [self.oldAppSelectButton setTarget:self];
+//    [self.oldAppSelectButton setAction:@selector(selectOldApp)];
+//    [self.view addSubview:self.oldAppSelectButton];
+//
+//    // 新版 App 标签
+//    self.updatedAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 390, labelWidth, height)];
+//    [self.updatedAppLabel setStringValue:@"new App:"];
+//    [self.updatedAppLabel setBezeled:NO];
+//    [self.updatedAppLabel setDrawsBackground:NO];
+//    [self.updatedAppLabel setEditable:NO];
+//    [self.updatedAppLabel setSelectable:NO];
+//    [self.view addSubview:self.updatedAppLabel];
+//
+//    // 新版 App 路径显示框（只读）
+//    self.updatedAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 390, fieldWidth, height)];
+//    [self.updatedAppPathField setEditable:NO];
+//    [self.view addSubview:self.updatedAppPathField];
+//
+//    // 新版 App 选择按钮
+//    self.updatedAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 385, buttonWidth, 30)];
+//    [self.updatedAppSelectButton setTitle:@"choose new App"];
+//    [self.updatedAppSelectButton setTarget:self];
+//    [self.updatedAppSelectButton setAction:@selector(selectUpdatedApp)];
+//    [self.view addSubview:self.updatedAppSelectButton];
+//
+//    // 生成增量更新按钮
+//    self.generateUpdateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, 340, 160, 30)];
+//    [self.generateUpdateButton setTitle:@"generate delta"];
+//    [self.generateUpdateButton setTarget:self];
+//    [self.generateUpdateButton setAction:@selector(generateUpdate)];
+//    [self.view addSubview:self.generateUpdateButton];
+//
+//    // 日志显示框（NSTextView 放在 NSScrollView 中）
+//    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, 20, self.view.bounds.size.width - padding * 2, 300)];
+//    scrollView.hasVerticalScroller = YES;
+//    scrollView.borderType = NSBezelBorder;
+//
+//    self.logTextView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
+//    [self.logTextView setEditable:NO];
+//    [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:13]];
+//    scrollView.documentView = self.logTextView;
+//    [self.view addSubview:scrollView];
+//    
+//    self.logTextView.font = [NSFont systemFontOfSize:14];
+//    
+//    [self logMessage:@"logging"];
+//}
 #pragma mark - setupDir
 
 - (void)setupDir{
@@ -122,8 +195,9 @@
     if (_oldAppDir) {
         [self.oldAppPathField setStringValue:_oldAppDir];
         [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppDir]];
-        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_oldAppDir];
-
+        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_oldAppDir logBlock:^(NSString *msg) {
+            [self logMessage:msg]; // self 是 ViewController 实例
+        }];
         if (versionInfo) {
 
             _oldVersion = versionInfo[@"version"];
@@ -141,11 +215,10 @@
     if (_NewAppDir) {
         [self.updatedAppPathField setStringValue:_NewAppDir];
         [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _NewAppDir]];
-        
-        NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_NewAppDir];
-
+         NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_NewAppDir logBlock:^(NSString *msg) {
+            [self logMessage:msg]; // self 是 ViewController 实例
+        }];
         if (versionInfo) {
-            
             _appName = [_NewAppDir lastPathComponent];
             _NewVersion = versionInfo[@"version"];
             _NewBuildVersion = versionInfo[@"build"];
@@ -210,11 +283,10 @@
     }];
     
     if (success) {
-//        
         NSString *baseURL = @"https://unigo.com/updates/";
         NSString *fullURL = [baseURL stringByAppendingPathComponent:_appName];
-
-        [self generateAppcastXMLWithAppName:_appName
+        
+        [AppcastGenerator generateAppcastXMLWithAppName: _appName
                                                 version:_NewVersion
                                            shortVersion:_NewBuildVersion
                                                 pubDate:[NSDate date]
@@ -227,6 +299,12 @@
                                            outputPath:_appcastDir];
 
         
+        NSDictionary *result = [AppcastGenerator parseAppcastXMLFromPath:_appcastDir];
+    //    NSLog(@"%@", result);
+        
+        [self logMessage:[NSString stringWithFormat:@" result of  %@", result]];
+        
+        
         [self logMessage:@"✅ success create delta.update copy to _outputDir"];
         [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
         [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
@@ -236,15 +314,7 @@
     }
 }
 
-- (void)writeAppcastXML:(NSString *)xml toPath:(NSString *)appcastPath {
-    NSError *writeError = nil;
-    BOOL success = [xml writeToFile:appcastPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
-    if (!success || writeError) {
-        [self logMessage:[NSString stringWithFormat:@"❌ write appcast.xml feiled: %@", writeError.localizedDescription]];
-    } else {
-        [self logMessage:[NSString stringWithFormat:@"📄 write appcast.xml: %@", appcastPath]];
-    }
-}
+
 
 - (void)logAllImportantPaths {
     [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
@@ -254,152 +324,6 @@
     [self logMessage:[NSString stringWithFormat:@"📄 oldAppPath: %@", _oldAppDir]];
     [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
 }
-
-- (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath {
-    NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
-    NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
-
-    if (!infoPlist) {
-        [self logMessage:[NSString stringWithFormat:@"❌ cannot read Info.plist: %@", infoPlistPath]];
-        return nil;
-    }
-
-    NSString *version = infoPlist[@"CFBundleShortVersionString"] ?: @"";
-    NSString *build = infoPlist[@"CFBundleVersion"] ?: @"";
-
-    return @{
-        @"version": version,
-        @"build": build
-    };
-}
-
-- (NSString *)rfc822DateStringFromDate:(NSDate *)date {
-    static NSDateFormatter *rfc822Formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        rfc822Formatter = [[NSDateFormatter alloc] init];
-        rfc822Formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-        rfc822Formatter.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss Z";
-    });
-    return [rfc822Formatter stringFromDate:date];
-}
-
-
-
-- (void)generateAppcastXMLWithAppName:(NSString *)appName
-                              version:(NSString *)version
-                         shortVersion:(NSString *)shortVersion
-                              pubDate:(NSDate *)pubDate
-                         fullAppPath:(NSString *)fullAppPath
-                        fullSignature:(NSString *)fullSignature
-                        deltaFilePath:(NSString *)deltaFilePath
-                     deltaFromVersion:(NSString *)deltaFromVersion
-                      deltaSignature:(NSString *)deltaSignature
-                              baseURL:(NSString *)baseURL
-                          outputPath:(NSString *)xmlOutputPath {
-    // 验证输入
-    if (!appName || !version || !shortVersion || !pubDate || !fullAppPath || !fullSignature || !xmlOutputPath) {
-        NSLog(@"缺少必要参数: appName=%@, version=%@, shortVersion=%@, pubDate=%@, fullAppPath=%@, fullSignature=%@, xmlOutputPath=%@",
-              appName, version, shortVersion, pubDate, fullAppPath, fullSignature, xmlOutputPath);
-        return;
-    }
-
-    // 动态拼接 baseURL
-//    NSString *appBaseURL = baseURL ?: @"https://unigo.com";
-//    appBaseURL = [appBaseURL stringByAppendingString:@"/"];
-    
-    NSString *validBaseURL = baseURL ?: @"https://unigo.com";
-        if ([validBaseURL hasPrefix:@"https:/"] && ![validBaseURL hasPrefix:@"https://"]) {
-            validBaseURL = [@"https://" stringByAppendingString:[validBaseURL substringFromIndex:7]];
-        }
-    NSString *appBaseURL = validBaseURL;
-    
-        if (![appBaseURL hasSuffix:@"/"]) {
-            appBaseURL = [appBaseURL stringByAppendingString:@"/"];
-        }
-    
-//
-    // 获取文件大小
-    unsigned long long fullSize  = fullAppPath ? [FileHelper fileSizeAtPath:fullAppPath] : 0 ;
-    unsigned long long deltaSize = deltaFilePath ? [FileHelper fileSizeAtPath:deltaFilePath] : 0;
-
-    // 构建 XML
-    NSMutableString *xml = [NSMutableString string];
-    [xml appendString:@"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"];
-    [xml appendString:@"<rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"];
-    [xml appendString:@"  <channel>\n"];
-    [xml appendFormat:@"    <title>%@ Updates</title>\n", appName];
-    [xml appendFormat:@"    <link>%@appcast.xml</link>\n", appBaseURL];
-    [xml appendFormat:@"    <description>Latest updates for %@</description>\n", appName];
-    [xml appendString:@"    <language>en</language>\n"];
-    [xml appendString:@"    <item>\n"];
-    [xml appendFormat:@"      <title>Version %@</title>\n", version];
-    [xml appendFormat:@"      <sparkle:releaseNotesLink>%@release_notes_%@.html</sparkle:releaseNotesLink>\n", appBaseURL, version];
-    [xml appendFormat:@"      <pubDate>%@</pubDate>\n", [self rfc822DateStringFromDate:pubDate]];
-
-     
-     [xml appendFormat:@"      <enclosure url=\"%@%@\" sparkle:version=\"%@\" sparkle:shortVersionString=\"%@\" length=\"%llu\" type=\"application/octet-stream\" sparkle:edSignature=\"%@\" />\n",
-      appBaseURL, appName, version, shortVersion, fullSize, fullSignature];
-     
-
-    if (deltaFilePath && deltaFromVersion && deltaSignature && deltaSize > 0) {
-        [xml appendString:@"      <sparkle:delta>\n"];
-        [xml appendFormat:@"        <enclosure url=\"%@upadte.delta\" sparkle:version=\"%@\" sparkle:deltaFrom=\"%@\" length=\"%llu\" type=\"application/octet-stream\" sparkle:edSignature=\"%@\" />\n",
-         appBaseURL, version, deltaFromVersion, deltaSize, deltaSignature];
-        [xml appendString:@"      </sparkle:delta>\n"];
-    }
-    [xml appendString:@"    </item>\n"];
-    [xml appendString:@"  </channel>\n"];
-    [xml appendString:@"</rss>\n"];
-    
-    // 写入文件
-    [self writeAppcastXML:xml toPath:xmlOutputPath];
-    
-    NSDictionary *result = [self parseAppcastXMLFromPath:_appcastDir];
-//    NSLog(@"%@", result);
-    
-    [self logMessage:[NSString stringWithFormat:@" result of  %@", result]];
-    
-}
-
-- (NSDictionary *)parseAppcastXMLFromPath:(NSString *)xmlPath {
-    NSError *error;
-    NSData *xmlData = [NSData dataWithContentsOfFile:xmlPath options:0 error:&error];
-    if (!xmlData) return nil;
-
-    NSXMLDocument *doc = [[NSXMLDocument alloc] initWithData:xmlData options:0 error:&error];
-    if (!doc) return nil;
-
-    NSMutableDictionary *result = [NSMutableDictionary dictionary];
-    result[@"appName"] = [[[doc nodesForXPath:@"//channel/title" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@" Updates" withString:@""];
-    result[@"baseURL"] = [[[doc nodesForXPath:@"//channel/link" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@"appcast.xml" withString:@""];
-    
-    NSXMLElement *item = [doc nodesForXPath:@"//item" error:nil].firstObject;
-    if (item) {
-        result[@"version"] = [[[item nodesForXPath:@"title" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@"Version " withString:@""];
-        result[@"releaseNotesLink"] = [[item nodesForXPath:@"sparkle:releaseNotesLink" error:nil].firstObject stringValue];
-        result[@"pubDate"] = [[item nodesForXPath:@"pubDate" error:nil].firstObject stringValue];
-
-        NSXMLElement *enclosure = [item nodesForXPath:@"enclosure" error:nil].firstObject;
-        if (enclosure) {
-            result[@"fullAppURL"] = [enclosure attributeForName:@"url"].stringValue;
-            result[@"shortVersion"] = [enclosure attributeForName:@"sparkle:shortVersionString"].stringValue;
-            result[@"fullSize"] = [enclosure attributeForName:@"length"].stringValue;
-            result[@"fullSignature"] = [enclosure attributeForName:@"sparkle:edSignature"].stringValue;
-        }
-
-        NSXMLElement *deltaEnclosure = [item nodesForXPath:@"sparkle:delta/enclosure" error:nil].firstObject;
-        if (deltaEnclosure) {
-            result[@"deltaURL"] = [deltaEnclosure attributeForName:@"url"].stringValue;
-            result[@"deltaFromVersion"] = [deltaEnclosure attributeForName:@"sparkle:deltaFrom"].stringValue;
-            result[@"deltaSize"] = [deltaEnclosure attributeForName:@"length"].stringValue;
-            result[@"deltaSignature"] = [deltaEnclosure attributeForName:@"sparkle:edSignature"].stringValue;
-        }
-    }
-
-    return result;
-}
-
 
 - (void)uploadPatchToServer:(NSString *)localPath remoteURL:(NSString *)remoteURL {
     // 你可以换成 curl / rsync / scp

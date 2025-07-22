@@ -17,8 +17,19 @@
 @interface AppcastGenerator : NSObject
 
 + (NSString *)rfc822DateStringFromDate:(NSDate *)date;
-+ (unsigned long long)fileSizeAtPath:(NSString *)path;
++ (NSDictionary *)parseAppcastXMLFromPath:(NSString *)xmlPath ;
 + (void)writeAppcastXML:(NSString *)xml toPath:(NSString *)path;
++ (void)generateAppcastXMLWithAppName:(NSString *)appName
+                              version:(NSString *)version
+                         shortVersion:(NSString *)shortVersion
+                              pubDate:(NSDate *)pubDate
+                         fullAppPath:(NSString *)fullAppPath
+                        fullSignature:(NSString *)fullSignature
+                        deltaFilePath:(NSString *)deltaFilePath
+                     deltaFromVersion:(NSString *)deltaFromVersion
+                      deltaSignature:(NSString *)deltaSignature
+                              baseURL:(NSString *)baseURL
+                           outputPath:(NSString *)xmlOutputPath ;
 
 @end
 

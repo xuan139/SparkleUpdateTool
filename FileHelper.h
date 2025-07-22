@@ -10,6 +10,9 @@
 
 @interface FileHelper : NSObject
 
++ (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
+                                   logBlock:(void (^)(NSString *msg))logBlock;
+
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath;
 + (NSString *)firstAppFileNameInPath:(NSString *)directoryPath;
 + (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir;
