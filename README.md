@@ -123,17 +123,18 @@ graph TD
 ## 新建一个app 用于版本控制和所有app的历史记录，所有app 历史记录
 ## 待测试 所有的游戏平台 和ostation
 
-//    | 参数名              | 示例值                                | 说明             |
-//    | ------------------ | ------------------------------------ | -------------- |
-//    | `appName`          | `"MyApp"`                            | 应用名称           |
-//    | `version`          | `"1.2.0"`                            | 完整版本号          |
-//    | `shortVersion`     | `"1.2"`                              | 展示用短版本号        |
-//    | `pubDate`          | `NSDate`                             | 发布日期           |
-//    | `dateString`       | `"Mon, 21 Jul 2025 10:00:00 +0000"`  | RFC 822 格式时间   |
-//    | `fullOldAppPath`   | zip 文件路径                           | 用于获取文件大小       |
-//    | `deltaFilePath`    | `.delta` 文件路径                      | 同上             |
-//    | `fullSignature`    | 签名字符串（Base64）                    | zip 包签名（可选）    |
-//    | `deltaSignature`   | 签名字符串                             | delta 签名（可选）   |
-//    | `deltaFromVersion` | `"1.1.0"`                            | 增量来源版本         |
-//    | `baseURL`          | `"https://server.com/updates/MyApp"` | 服务器端资源目录 URL   |
-//    | `xmlOutputPath`    | 输出 XML 路径                          | 保存生成 XML 的目标位置 |
+| 参数名              | 示例值                                | 说明                     |
+|---------------------|----------------------------------------|--------------------------|
+| `appName`           | `"MyApp"`                              | 应用名称                 |
+| `version`           | `"1.2.0"`                              | 完整版本号               |
+| `shortVersion`      | `"1.2"`                                | 展示用短版本号           |
+| `pubDate`           | `NSDate`                               | 发布日期（NSDate 对象）  |
+| `dateString`        | `"Mon, 21 Jul 2025 10:00:00 +0000"`    | RFC 822 格式时间字符串   |
+| `fullOldAppPath`    | `/path/to/MyApp-1.2.0.zip`             | 完整 App 包 zip 文件路径 |
+| `deltaFilePath`     | `/path/to/1.1.0-to-1.2.0.delta`        | 增量更新包 `.delta` 路径 |
+| `fullSignature`     | `"abcdef..."`                          | zip 包签名（Base64，可选） |
+| `deltaSignature`    | `"123456..."`                          | delta 包签名（Base64，可选） |
+| `deltaFromVersion`  | `"1.1.0"`                              | 增量更新来源版本         |
+| `baseURL`           | `"https://server.com/updates/MyApp"`  | 服务器资源 URL 前缀      |
+| `xmlOutputPath`     | `/path/to/appcast.xml`                 | 输出 XML 文件保存路径     |
+
