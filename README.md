@@ -53,36 +53,24 @@ Sample `appcast.xml` structure:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
-     xmlns:dc="http://purl.org/dc/elements/1.1/">
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>App Updates</title>
-    <link>https://yourserver.com/updates/</link>
-    <description>Latest updates for your app</description>
+    <title>OStation_V15.app Updates</title>
+    <link>https://unigo.com/updates/OStation_V15.app/appcast.xml</link>
+    <description>Latest updates for OStation_V15.app</description>
     <language>en</language>
-
     <item>
-      <title>Version 2.0</title>
-      <sparkle:releaseNotesLink>https://yourserver.com/updates/release_notes_2.0.html</sparkle:releaseNotesLink>
-      <pubDate>Fri, 18 Jul 2025 10:35:51 -0500</pubDate>
-      <enclosure url="https://yourserver.com/updates/YourApp-2.0.zip"
-                 sparkle:version="2.0"
-                 sparkle:shortVersionString="2.0"
-                 length="0"
-                 type="application/octet-stream"
-                 sparkle:edSignature="ApZHFghsd4Sl8nUy3eN2+XzO0VoD..." />
-
+      <title>Version 1.5</title>
+      <sparkle:releaseNotesLink>https://unigo.com/updates/OStation_V15.app/release_notes_1.5.html</sparkle:releaseNotesLink>
+      <pubDate>Tue, 22 Jul 2025 18:28:56 -0500</pubDate>
+      <enclosure url="https://unigo.com/updates/OStation_V15.app/OStation_V15.app" sparkle:version="1.5" sparkle:shortVersionString="1.5" length="447640" type="application/octet-stream" sparkle:edSignature="full_sig" />
       <sparkle:delta>
-        <enclosure url="https://yourserver.com/updates/YourApp-1.5-to-2.0.delta"
-                   sparkle:version="2.0"
-                   sparkle:deltaFrom="1.5"
-                   length="34518"
-                   type="application/octet-stream"
-                   sparkle:edSignature="LWHx4F65ifViHpkguF0UziBnwYpi..." />
+        <enclosure url="https://unigo.com/updates/OStation_V15.app/upadte.delta" sparkle:version="1.5" sparkle:deltaFrom="1.5" length="6250" type="application/octet-stream" sparkle:edSignature="delta_sig" />
       </sparkle:delta>
     </item>
   </channel>
 </rss>
+
 ```
 
 ## Step 4:  Way of Updater
