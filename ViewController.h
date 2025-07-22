@@ -21,22 +21,24 @@
 @property (nonatomic, strong) NSButton *generateUpdateButton;
 @property (nonatomic, strong) NSTextView *logTextView;
 
+// 关键文件路径
+@property (nonatomic, strong) NSString *appName;
+
 @property (nonatomic, strong) NSString *oldVersion;
 @property (nonatomic, strong) NSString *oldBuildVersion;
 @property (nonatomic, strong) NSString *NewVersion;
 @property (nonatomic, strong) NSString *NewBuildVersion;
 
 @property (nonatomic, strong) NSString *docsDir;
-
 @property (nonatomic, strong) NSString *oldAppDir;
 @property (nonatomic, strong) NSString *NewAppDir;
 
-// 关键文件路径
 
+@property (nonatomic, strong) NSString *sourceDeltaDir;
 @property (nonatomic, strong) NSString *oldfullZipPathFileName;
 @property (nonatomic, strong) NSString *newfullZipPathFileName;
+
 @property (nonatomic, strong) NSString *deltaDir;
-@property (nonatomic, strong) NSString *sourceDeltaDir;
 @property (nonatomic, strong) NSString *deltaPath;
 
 @property (nonatomic, strong) NSString *patchFilePath;

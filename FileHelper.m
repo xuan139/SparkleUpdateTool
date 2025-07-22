@@ -11,6 +11,15 @@
 @implementation FileHelper
 
 
++ (NSString *)firstAppFileNameInPath:(NSString *)directoryPath {
+    // 获取文件管理器
+
+    // 提取并返回文件名
+    return [directoryPath lastPathComponent];
+}
+
+
+
 + (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     

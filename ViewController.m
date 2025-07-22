@@ -9,6 +9,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "SparkleHelper.h"
 #import "FileHelper.h"
+#import "AppcastGenerator.h"
 
 @implementation ViewController
 
@@ -117,16 +118,20 @@
 - (void)selectOldApp {
 
     _oldAppDir = [self openAppFromSubdirectory:@"sparkleOldApp"];
+
     if (_oldAppDir) {
         [self.oldAppPathField setStringValue:_oldAppDir];
         [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppDir]];
         NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_oldAppDir];
 
         if (versionInfo) {
+
             _oldVersion = versionInfo[@"version"];
             _oldBuildVersion = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 OLD App Build Version: %@ (Build: %@)", _oldVersion, _oldBuildVersion]];
         }
+        [self logMessage:[NSString stringWithFormat:@"✅ App Name: %@", _appName]];
+        
     }
 }
 
@@ -140,28 +145,14 @@
         NSDictionary *versionInfo = [self getAppVersionInfoFromPath:_NewAppDir];
 
         if (versionInfo) {
+            
+            _appName = [_NewAppDir lastPathComponent];
             _NewVersion = versionInfo[@"version"];
             _NewBuildVersion = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 NEW App Build Version: %@ (Build: %@)", _NewVersion, _NewBuildVersion]];
         }
     }
 }
-
-/// 打开文件选择面板，限制只能选择 .app 文件
-//- (NSString *)openAppSelectionPanel {
-//    NSOpenPanel *panel = [NSOpenPanel openPanel];
-//
-//    panel.canChooseFiles = YES;
-//    panel.canChooseDirectories = NO;
-//    panel.allowsMultipleSelection = NO;
-//    
-//    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
-//
-//    if ([panel runModal] == NSModalResponseOK) {
-//        return panel.URL.path;
-//    }
-//    return nil;
-//}
 
 
 - (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
@@ -214,13 +205,28 @@
                                                  toNewPath:_NewAppDir
                                                  outputPath:_deltaDir
                                                  logBlock:^(NSString *log) {
-        // 这里可以打印日志或者更新 UI
-//        NSLog(@"📣 %@", log);
-        
-        [self logMessage:log];
+        [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
+
     }];
     
     if (success) {
+//        
+        NSString *baseURL = @"https://unigo.com/updates/";
+        NSString *fullURL = [baseURL stringByAppendingPathComponent:_appName];
+
+        [self generateAppcastXMLWithAppName:_appName
+                                                version:_NewVersion
+                                           shortVersion:_NewBuildVersion
+                                                pubDate:[NSDate date]
+                                           fullAppPath:_NewAppDir
+                                          fullSignature:@"full_sig"
+                                         deltaFilePath:_deltaDir
+                                      deltaFromVersion:@"1.5"
+                                       deltaSignature:@"delta_sig"
+                                               baseURL:fullURL
+                                           outputPath:_appcastDir];
+
+        
         [self logMessage:@"✅ success create delta.update copy to _outputDir"];
         [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
         [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
@@ -249,9 +255,6 @@
     [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
 }
 
-
-
-
 - (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath {
     NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
     NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
@@ -270,65 +273,133 @@
     };
 }
 
-- (void)generateAppcastXMLWithVersion:(NSString *)version
+- (NSString *)rfc822DateStringFromDate:(NSDate *)date {
+    static NSDateFormatter *rfc822Formatter = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        rfc822Formatter = [[NSDateFormatter alloc] init];
+        rfc822Formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+        rfc822Formatter.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss Z";
+    });
+    return [rfc822Formatter stringFromDate:date];
+}
+
+- (unsigned long long)fileSizeAtPath:(NSString *)filePath {
+    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
+    return [attributes fileSize];
+}
+
+
+- (void)generateAppcastXMLWithAppName:(NSString *)appName
+                              version:(NSString *)version
                          shortVersion:(NSString *)shortVersion
                               pubDate:(NSDate *)pubDate
-                          fullZipPath:(NSString *)zipPath
-                            deltaPath:(NSString *)deltaPath
-                    deltaFromVersion:(NSString *)deltaFromVersion
-                            signature:(NSString *)signature
-                       deltaSignature:(NSString *)deltaSignature
-                           outputPath:(NSString *)xmlOutputPath
-{
-    // 日期格式化
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-    formatter.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss Z";
-    NSString *dateString = [formatter stringFromDate:pubDate];
+                         fullAppPath:(NSString *)fullAppPath
+                        fullSignature:(NSString *)fullSignature
+                        deltaFilePath:(NSString *)deltaFilePath
+                     deltaFromVersion:(NSString *)deltaFromVersion
+                      deltaSignature:(NSString *)deltaSignature
+                              baseURL:(NSString *)baseURL
+                          outputPath:(NSString *)xmlOutputPath {
+    // 验证输入
+    if (!appName || !version || !shortVersion || !pubDate || !fullAppPath || !fullSignature || !xmlOutputPath) {
+        NSLog(@"缺少必要参数: appName=%@, version=%@, shortVersion=%@, pubDate=%@, fullAppPath=%@, fullSignature=%@, xmlOutputPath=%@",
+              appName, version, shortVersion, pubDate, fullAppPath, fullSignature, xmlOutputPath);
+        return;
+    }
+
+    // 动态拼接 baseURL
+//    NSString *appBaseURL = baseURL ?: @"https://unigo.com";
+//    appBaseURL = [appBaseURL stringByAppendingString:@"/"];
+    
+    NSString *validBaseURL = baseURL ?: @"https://unigo.com";
+        if ([validBaseURL hasPrefix:@"https:/"] && ![validBaseURL hasPrefix:@"https://"]) {
+            validBaseURL = [@"https://" stringByAppendingString:[validBaseURL substringFromIndex:7]];
+        }
+    NSString *appBaseURL = validBaseURL;
+    
+        if (![appBaseURL hasSuffix:@"/"]) {
+            appBaseURL = [appBaseURL stringByAppendingString:@"/"];
+        }
+    
 
     // 获取文件大小
-    unsigned long long fullSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:zipPath error:nil] fileSize];
-    unsigned long long deltaSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:deltaPath error:nil] fileSize];
+    unsigned long long fullSize = [self fileSizeAtPath:fullAppPath];
+    unsigned long long deltaSize = deltaFilePath ? [self fileSizeAtPath:deltaFilePath] : 0;
 
-    // 拼接 XML 字符串
-    NSString *xml = [NSString stringWithFormat:
-                     @"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-                     "<rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\"\n"
-                     "     xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
-                     "  <channel>\n"
-                     "    <title>App Updates</title>\n"
-                     "    <link>https://yourserver.com/updates/</link>\n"
-                     "    <description>Latest updates for your app</description>\n"
-                     "    <language>en</language>\n"
-                     "\n"
-                     "    <item>\n"
-                     "      <title>Version %@</title>\n"
-                     "      <sparkle:releaseNotesLink>https://yourserver.com/updates/release_notes_%@.html</sparkle:releaseNotesLink>\n"
-                     "      <pubDate>%@</pubDate>\n"
-                     "      <enclosure url=\"https://yourserver.com/updates/YourApp-%@.zip\"\n"
-                     "                 sparkle:version=\"%@\"\n"
-                     "                 sparkle:shortVersionString=\"%@\"\n"
-                     "                 length=\"%llu\"\n"
-                     "                 type=\"application/octet-stream\"\n"
-                     "                 sparkle:edSignature=\"%@\" />\n"
-                     "\n"
-                     "      <sparkle:delta>\n"
-                     "        <enclosure url=\"https://yourserver.com/updates/YourApp-%@-to-%@.delta\"\n"
-                     "                   sparkle:version=\"%@\"\n"
-                     "                   sparkle:deltaFrom=\"%@\"\n"
-                     "                   length=\"%llu\"\n"
-                     "                   type=\"application/octet-stream\"\n"
-                     "                   sparkle:edSignature=\"%@\" />\n"
-                     "      </sparkle:delta>\n"
-                     "    </item>\n"
-                     "  </channel>\n"
-                     "</rss>\n",
-                     version, version, dateString,
-                     version, version, shortVersion, fullSize, signature,
-                     deltaFromVersion, version, version, deltaFromVersion, deltaSize, deltaSignature];
+    // 构建 XML
+    NSMutableString *xml = [NSMutableString string];
+    [xml appendString:@"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"];
+    [xml appendString:@"<rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"];
+    [xml appendString:@"  <channel>\n"];
+    [xml appendFormat:@"    <title>%@ Updates</title>\n", appName];
+    [xml appendFormat:@"    <link>%@appcast.xml</link>\n", appBaseURL];
+    [xml appendFormat:@"    <description>Latest updates for %@</description>\n", appName];
+    [xml appendString:@"    <language>en</language>\n"];
+    [xml appendString:@"    <item>\n"];
+    [xml appendFormat:@"      <title>Version %@</title>\n", version];
+    [xml appendFormat:@"      <sparkle:releaseNotesLink>%@release_notes_%@.html</sparkle:releaseNotesLink>\n", appBaseURL, version];
+    [xml appendFormat:@"      <pubDate>%@</pubDate>\n", [self rfc822DateStringFromDate:pubDate]];
 
-    // 写入 XML 文件（封装）
+     
+     [xml appendFormat:@"      <enclosure url=\"%@%@\" sparkle:version=\"%@\" sparkle:shortVersionString=\"%@\" length=\"%llu\" type=\"application/octet-stream\" sparkle:edSignature=\"%@\" />\n",
+      appBaseURL, appName, version, shortVersion, fullSize, fullSignature];
+     
+
+    if (deltaFilePath && deltaFromVersion && deltaSignature && deltaSize > 0) {
+        [xml appendString:@"      <sparkle:delta>\n"];
+        [xml appendFormat:@"        <enclosure url=\"%@upadte.delta\" sparkle:version=\"%@\" sparkle:deltaFrom=\"%@\" length=\"%llu\" type=\"application/octet-stream\" sparkle:edSignature=\"%@\" />\n",
+         appBaseURL, version, deltaFromVersion, deltaSize, deltaSignature];
+        [xml appendString:@"      </sparkle:delta>\n"];
+    }
+    [xml appendString:@"    </item>\n"];
+    [xml appendString:@"  </channel>\n"];
+    [xml appendString:@"</rss>\n"];
+    
+    // 写入文件
     [self writeAppcastXML:xml toPath:xmlOutputPath];
+    
+    NSDictionary *result = [self parseAppcastXMLFromPath:_appcastDir];
+    NSLog(@"%@", result);
+    
+}
+
+- (NSDictionary *)parseAppcastXMLFromPath:(NSString *)xmlPath {
+    NSError *error;
+    NSData *xmlData = [NSData dataWithContentsOfFile:xmlPath options:0 error:&error];
+    if (!xmlData) return nil;
+
+    NSXMLDocument *doc = [[NSXMLDocument alloc] initWithData:xmlData options:0 error:&error];
+    if (!doc) return nil;
+
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"appName"] = [[[doc nodesForXPath:@"//channel/title" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@" Updates" withString:@""];
+    result[@"baseURL"] = [[[doc nodesForXPath:@"//channel/link" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@"appcast.xml" withString:@""];
+    
+    NSXMLElement *item = [doc nodesForXPath:@"//item" error:nil].firstObject;
+    if (item) {
+        result[@"version"] = [[[item nodesForXPath:@"title" error:nil].firstObject stringValue] stringByReplacingOccurrencesOfString:@"Version " withString:@""];
+        result[@"releaseNotesLink"] = [[item nodesForXPath:@"sparkle:releaseNotesLink" error:nil].firstObject stringValue];
+        result[@"pubDate"] = [[item nodesForXPath:@"pubDate" error:nil].firstObject stringValue];
+
+        NSXMLElement *enclosure = [item nodesForXPath:@"enclosure" error:nil].firstObject;
+        if (enclosure) {
+            result[@"fullAppURL"] = [enclosure attributeForName:@"url"].stringValue;
+            result[@"shortVersion"] = [enclosure attributeForName:@"sparkle:shortVersionString"].stringValue;
+            result[@"fullSize"] = [enclosure attributeForName:@"length"].stringValue;
+            result[@"fullSignature"] = [enclosure attributeForName:@"sparkle:edSignature"].stringValue;
+        }
+
+        NSXMLElement *deltaEnclosure = [item nodesForXPath:@"sparkle:delta/enclosure" error:nil].firstObject;
+        if (deltaEnclosure) {
+            result[@"deltaURL"] = [deltaEnclosure attributeForName:@"url"].stringValue;
+            result[@"deltaFromVersion"] = [deltaEnclosure attributeForName:@"sparkle:deltaFrom"].stringValue;
+            result[@"deltaSize"] = [deltaEnclosure attributeForName:@"length"].stringValue;
+            result[@"deltaSignature"] = [deltaEnclosure attributeForName:@"sparkle:edSignature"].stringValue;
+        }
+    }
+
+    return result;
 }
 
 

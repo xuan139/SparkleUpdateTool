@@ -9,6 +9,8 @@
 #import <Foundation/Foundation.h>
 
 @interface FileHelper : NSObject
+
++ (NSString *)firstAppFileNameInPath:(NSString *)directoryPath;
 + (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir;
 + (NSString *)generateSubdirectory:(NSString *)subDirName;
 + (NSString *)fullPathInDocuments:(NSString *)relativePath;
