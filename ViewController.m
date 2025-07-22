@@ -284,10 +284,6 @@
     return [rfc822Formatter stringFromDate:date];
 }
 
-- (unsigned long long)fileSizeAtPath:(NSString *)filePath {
-    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
-    return [attributes fileSize];
-}
 
 
 - (void)generateAppcastXMLWithAppName:(NSString *)appName
@@ -324,8 +320,8 @@
     
 
     // 获取文件大小
-    unsigned long long fullSize = [self fileSizeAtPath:fullAppPath];
-    unsigned long long deltaSize = deltaFilePath ? [self fileSizeAtPath:deltaFilePath] : 0;
+    unsigned long long fullSize  = fullAppPath ? [FileHelper fileSizeAtPath:fullAppPath] : 0 ;
+    unsigned long long deltaSize = deltaFilePath ? [FileHelper fileSizeAtPath:deltaFilePath] : 0;
 
     // 构建 XML
     NSMutableString *xml = [NSMutableString string];
