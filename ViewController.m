@@ -25,25 +25,20 @@
     [self setupDir];
 }
 
-
+#pragma mark - setupUI
 - (void)setupUI {
     CGFloat baseY = 440;
     CGFloat spacingY = 50;
-    
     CGFloat padding = 20;
-
     [self setupAppSelectorWithLabel:@"old App:"
                               action:@selector(selectOldApp)
                           yPosition:baseY
                               isOld:YES];
-
     [self setupAppSelectorWithLabel:@"new App:"
                               action:@selector(selectUpdatedApp)
                           yPosition:baseY - spacingY
                               isOld:NO];
-
     [self setupGenerateButtonAtY:baseY - spacingY * 2];
-    
     NSTextView *logTextView;
     NSScrollView *logScrollView = [UIHelper createLogTextViewWithFrame:NSMakeRect(20, 20, 600, 300)
                                                               textView:&logTextView];
@@ -52,6 +47,24 @@
     self.logTextView.font = [NSFont systemFontOfSize:14];
     [self logMessage:@"logging"];
 }
+
+
+
+#pragma mark - setupDir
+
+- (void)setupDir{
+    _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
+    _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
+    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
+    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
+
+    [FileHelper prepareEmptyFileAtPath:_deltaDir];
+    [FileHelper prepareEmptyFileAtPath:_logFileDir];
+    [FileHelper prepareEmptyFileAtPath:_appcastDir];
+    
+    [self logAllImportantPaths];
+}
+
 
 - (void)setupAppSelectorWithLabel:(NSString *)labelText
                            action:(SEL)selector
@@ -96,97 +109,6 @@
                                                           frame:NSMakeRect(padding, y, 160, 30)];
     [self.view addSubview:self.generateUpdateButton];
 }
-
-
-//#pragma mark - setupUI
-//- (void)setupUI {
-//    CGFloat padding = 20;
-//    CGFloat labelWidth = 100;
-//    CGFloat fieldWidth = 400;
-//    CGFloat buttonWidth = 130;
-//    CGFloat height = 24;
-//
-//    // 旧版 App 标签
-//    self.oldAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 440, labelWidth, height)];
-//    [self.oldAppLabel setStringValue:@"old App:"];
-//    [self.oldAppLabel setBezeled:NO];
-//    [self.oldAppLabel setDrawsBackground:NO];
-//    [self.oldAppLabel setEditable:NO];
-//    [self.oldAppLabel setSelectable:NO];
-//    [self.view addSubview:self.oldAppLabel];
-//
-//    // 旧版 App 路径显示框（只读）
-//    self.oldAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 440, fieldWidth, height)];
-//    [self.oldAppPathField setEditable:NO];
-//    [self.view addSubview:self.oldAppPathField];
-//
-//    // 旧版 App 选择按钮
-//    self.oldAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 435, buttonWidth, 30)];
-//    [self.oldAppSelectButton setTitle:@"choose old App"];
-//    [self.oldAppSelectButton setTarget:self];
-//    [self.oldAppSelectButton setAction:@selector(selectOldApp)];
-//    [self.view addSubview:self.oldAppSelectButton];
-//
-//    // 新版 App 标签
-//    self.updatedAppLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 390, labelWidth, height)];
-//    [self.updatedAppLabel setStringValue:@"new App:"];
-//    [self.updatedAppLabel setBezeled:NO];
-//    [self.updatedAppLabel setDrawsBackground:NO];
-//    [self.updatedAppLabel setEditable:NO];
-//    [self.updatedAppLabel setSelectable:NO];
-//    [self.view addSubview:self.updatedAppLabel];
-//
-//    // 新版 App 路径显示框（只读）
-//    self.updatedAppPathField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, 390, fieldWidth, height)];
-//    [self.updatedAppPathField setEditable:NO];
-//    [self.view addSubview:self.updatedAppPathField];
-//
-//    // 新版 App 选择按钮
-//    self.updatedAppSelectButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, 385, buttonWidth, 30)];
-//    [self.updatedAppSelectButton setTitle:@"choose new App"];
-//    [self.updatedAppSelectButton setTarget:self];
-//    [self.updatedAppSelectButton setAction:@selector(selectUpdatedApp)];
-//    [self.view addSubview:self.updatedAppSelectButton];
-//
-//    // 生成增量更新按钮
-//    self.generateUpdateButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, 340, 160, 30)];
-//    [self.generateUpdateButton setTitle:@"generate delta"];
-//    [self.generateUpdateButton setTarget:self];
-//    [self.generateUpdateButton setAction:@selector(generateUpdate)];
-//    [self.view addSubview:self.generateUpdateButton];
-//
-//    // 日志显示框（NSTextView 放在 NSScrollView 中）
-//    NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(padding, 20, self.view.bounds.size.width - padding * 2, 300)];
-//    scrollView.hasVerticalScroller = YES;
-//    scrollView.borderType = NSBezelBorder;
-//
-//    self.logTextView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
-//    [self.logTextView setEditable:NO];
-//    [self.logTextView setFont:[NSFont fontWithName:@"Menlo" size:13]];
-//    scrollView.documentView = self.logTextView;
-//    [self.view addSubview:scrollView];
-//    
-//    self.logTextView.font = [NSFont systemFontOfSize:14];
-//    
-//    [self logMessage:@"logging"];
-//}
-#pragma mark - setupDir
-
-- (void)setupDir{
-    _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
-    _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
-    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
-    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
-
-    [FileHelper prepareEmptyFileAtPath:_deltaDir];
-    [FileHelper prepareEmptyFileAtPath:_logFileDir];
-    [FileHelper prepareEmptyFileAtPath:_appcastDir];
-    
-    [self logAllImportantPaths];
-}
-
-
-
 #pragma mark - Button Actions
 - (void)selectOldApp {
 

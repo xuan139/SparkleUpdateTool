@@ -71,6 +71,19 @@ Sample `appcast.xml` structure:
   </channel>
 </rss>
 
+[AppcastGenerator generateAppcastXMLWithAppName:_appName
+                                        version:_NewVersion
+                                   shortVersion:_NewBuildVersion
+                                        pubDate:[NSDate date]
+                                   fullAppPath:_NewAppDir
+                                  fullSignature:@"full_sig"
+                                 deltaFilePath:_deltaDir
+                              deltaFromVersion:@"1.5"
+                               deltaSignature:@"delta_sig"
+                                       baseURL:fullURL
+                                   outputPath:_appcastDir];
+
+                                           
 ```
 | 参数名              | 示例值                                | 说明                     |
 |---------------------|----------------------------------------|--------------------------|
