@@ -204,6 +204,8 @@
 
     }];
     
+    
+    
     if (success) {
         NSString *baseURL = @"https://unigo.com/updates/";
         NSString *fullURL = [baseURL stringByAppendingPathComponent:_appName];
