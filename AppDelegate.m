@@ -27,7 +27,7 @@
                                                 backing:NSBackingStoreBuffered
                                                   defer:NO];
     [self.window center];
-    [self.window setTitle:@"Sparkle Delta Updatter V1.0"];
+    [self.window setTitle:@"Sparkle Delta Generator V1.0"];
 
     // 创建主视图控制器
     self.viewController = [[ViewController alloc] init];

@@ -10,6 +10,7 @@
 
 @implementation SparkleHelper
 
+
 + (void)generateKeys {
     NSString *generateKeysPath = @"/usr/local/bin/generate_keys";
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:generateKeysPath]) {

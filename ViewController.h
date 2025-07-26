@@ -6,6 +6,7 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import "AppUpdateViewController.h"
 
 @interface ViewController : NSViewController
 
@@ -19,6 +20,7 @@
 @property (nonatomic, strong) NSButton *updatedAppSelectButton;
 
 @property (nonatomic, strong) NSButton *generateUpdateButton;
+@property (nonatomic, strong) NSButton *applyUpdateButton;
 @property (nonatomic, strong) NSTextView *logTextView;
 
 // 关键文件路径
@@ -45,6 +47,9 @@
 @property (nonatomic, strong) NSString *outputDir;
 @property (nonatomic, strong) NSString *logFileDir;
 @property (nonatomic, strong) NSString *appcastDir;
+
+@property (nonatomic, strong) NSWindowController *updateWindowController;
+
 
 @end
 

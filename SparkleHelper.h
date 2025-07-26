@@ -11,6 +11,7 @@
 
 @interface SparkleHelper : NSObject
 
+
 + (void)generateKeys;
 
 + (NSString *)getPublicKey;

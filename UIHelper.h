@@ -18,6 +18,6 @@
                              action:(SEL)action
                               frame:(NSRect)frame;
 + (NSScrollView *)createLogTextViewWithFrame:(NSRect)frame textView:(NSTextView **)textView;
-
++ (void)showSuccessAlertWithTitle:(NSString *)title message:(NSString *)message;
 
 @end

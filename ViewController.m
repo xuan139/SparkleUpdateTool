@@ -4,12 +4,14 @@
 //
 //  Created by lijiaxi on 7/17/25.
 //
-
+#import <Cocoa/Cocoa.h>
 #import "ViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
 #import "SparkleHelper.h"
 #import "FileHelper.h"
 #import "AppcastGenerator.h"
+#import "AppUpdateViewController.h"
 #import "UIHelper.h"
 
 @implementation ViewController
@@ -23,29 +25,35 @@
     [super viewDidLoad];
     [self setupUI];
     [self setupDir];
+    [self checkAndHandleBinaryDelta];
 }
 
 #pragma mark - setupUI
 - (void)setupUI {
     CGFloat baseY = 440;
     CGFloat spacingY = 50;
-    CGFloat padding = 20;
-    [self setupAppSelectorWithLabel:@"old App:"
-                              action:@selector(selectOldApp)
-                          yPosition:baseY
-                              isOld:YES];
-    [self setupAppSelectorWithLabel:@"new App:"
-                              action:@selector(selectUpdatedApp)
-                          yPosition:baseY - spacingY
-                              isOld:NO];
+
+    NSDictionary *oldAppControls = [self setupAppSelectorWithLabel:@"Old App"
+                                                            action:@selector(selectOldApp)
+                                                         yPosition:baseY];
+    self.oldAppLabel = oldAppControls[@"label"];
+    self.oldAppPathField = oldAppControls[@"field"];
+    self.oldAppSelectButton = oldAppControls[@"button"];
+
+    NSDictionary *newAppControls = [self setupAppSelectorWithLabel:@"New App"
+                                                            action:@selector(selectUpdatedApp)
+                                                         yPosition:baseY - spacingY];
+    self.updatedAppLabel = newAppControls[@"label"];
+    self.updatedAppPathField = newAppControls[@"field"];
+    self.updatedAppSelectButton = newAppControls[@"button"];
+    
     [self setupGenerateButtonAtY:baseY - spacingY * 2];
     NSTextView *logTextView;
     NSScrollView *logScrollView = [UIHelper createLogTextViewWithFrame:NSMakeRect(20, 20, 600, 300)
                                                               textView:&logTextView];
     self.logTextView = logTextView;
     [self.view addSubview:logScrollView];
-    self.logTextView.font = [NSFont systemFontOfSize:14];
-    [self logMessage:@"logging"];
+    [self logMessage:@"Begin logging"];
 }
 
 
@@ -56,20 +64,17 @@
     _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
     _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
     _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
-    _appcastDir = [FileHelper fullPathInDocuments:@"sparkleAppcastDir/appcast.xml"];
-
+    
     [FileHelper prepareEmptyFileAtPath:_deltaDir];
     [FileHelper prepareEmptyFileAtPath:_logFileDir];
-    [FileHelper prepareEmptyFileAtPath:_appcastDir];
-    
+     
     [self logAllImportantPaths];
 }
 
 
-- (void)setupAppSelectorWithLabel:(NSString *)labelText
-                           action:(SEL)selector
-                         yPosition:(CGFloat)y
-                            isOld:(BOOL)isOld {
+- (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
+                                     action:(SEL)selector
+                                  yPosition:(CGFloat)y {
     CGFloat padding = 20;
     CGFloat labelWidth = 100;
     CGFloat fieldWidth = 400;
@@ -83,23 +88,20 @@
     NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
     [self.view addSubview:field];
 
-    NSString *buttonTitle = [NSString stringWithFormat:@"choose %@", labelText];
+    NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
     NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
-                                                 target:self
-                                                 action:selector
-                                                  frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
+                                                target:self
+                                                action:selector
+                                                 frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
     [self.view addSubview:button];
 
-    if (isOld) {
-        self.oldAppLabel = label;
-        self.oldAppPathField = field;
-        self.oldAppSelectButton = button;
-    } else {
-        self.updatedAppLabel = label;
-        self.updatedAppPathField = field;
-        self.updatedAppSelectButton = button;
-    }
+    return @{
+        @"label": label,
+        @"field": field,
+        @"button": button
+    };
 }
+
 
 - (void)setupGenerateButtonAtY:(CGFloat)y {
     CGFloat padding = 20;
@@ -108,12 +110,19 @@
                                                          action:@selector(generateUpdate)
                                                           frame:NSMakeRect(padding, y, 160, 30)];
     [self.view addSubview:self.generateUpdateButton];
+    
+    
+    self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
+                                                      target:self
+                                                      action:@selector(setUpApplyUpdateWindow)
+                                                       frame:NSMakeRect(padding*12, y, 160, 30)];
+    [self.view addSubview:self.applyUpdateButton];
 }
 #pragma mark - Button Actions
 - (void)selectOldApp {
-
+    
     _oldAppDir = [self openAppFromSubdirectory:@"sparkleOldApp"];
-
+    
     if (_oldAppDir) {
         [self.oldAppPathField setStringValue:_oldAppDir];
         [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppDir]];
@@ -121,7 +130,6 @@
             [self logMessage:msg]; // self 是 ViewController 实例
         }];
         if (versionInfo) {
-
             _oldVersion = versionInfo[@"version"];
             _oldBuildVersion = versionInfo[@"build"];
             [self logMessage:[NSString stringWithFormat:@"📦 OLD App Build Version: %@ (Build: %@)", _oldVersion, _oldBuildVersion]];
@@ -133,11 +141,11 @@
 
 - (void)selectUpdatedApp {
     _NewAppDir = [self openAppFromSubdirectory:@"sparkleNewApp"];
-
+    
     if (_NewAppDir) {
         [self.updatedAppPathField setStringValue:_NewAppDir];
         [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _NewAppDir]];
-         NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_NewAppDir logBlock:^(NSString *msg) {
+        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_NewAppDir logBlock:^(NSString *msg) {
             [self logMessage:msg]; // self 是 ViewController 实例
         }];
         if (versionInfo) {
@@ -154,7 +162,7 @@
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
 
-    // 如果目录不存在则创建
+    // 创建目录（如不存在）
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:fullPath]) {
         NSError *error = nil;
@@ -163,18 +171,22 @@
                                 attributes:nil
                                      error:&error];
         if (error) {
-            NSLog(@"❌ 创建目录失败: %@", error.localizedDescription);
+            NSLog(@"❌ Failed to create directory: %@", error.localizedDescription);
             return nil;
         }
     }
 
-    // 打开 NSOpenPanel
+    // 使用封装的方法弹出文件选择面板
+    return [self selectAppFromDirectory:fullPath];
+}
+
+- (NSString *)selectAppFromDirectory:(NSString *)directoryPath {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = NO;
     panel.allowsMultipleSelection = NO;
     panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
-    panel.directoryURL = [NSURL fileURLWithPath:fullPath];
+    panel.directoryURL = [NSURL fileURLWithPath:directoryPath];
 
     if ([panel runModal] == NSModalResponseOK) {
         return panel.URL.path;
@@ -182,6 +194,83 @@
     return nil;
 }
 
+
+BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
+    NSString *binaryDeltaPath = @"/usr/local/bin/BinaryDelta";
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    
+    // 检查文件是否存在
+    if ([fileManager fileExistsAtPath:binaryDeltaPath]) {
+        NSLog(@"BinaryDelta 已存在: %@", binaryDeltaPath);
+        return YES;
+    }
+    
+    // 确保目标目录存在
+    NSString *directory = [binaryDeltaPath stringByDeletingLastPathComponent];
+    NSError *dirError;
+    [fileManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&dirError];
+    if (dirError) {
+        NSLog(@"创建目录失败: %@", dirError.localizedDescription);
+        return NO;
+    }
+    
+    // 信号量以等待异步下载
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    __block BOOL success = NO;
+    
+    // 下载 BinaryDelta
+    NSURLSessionDownloadTask *task = [[NSURLSession sharedSession] downloadTaskWithURL:downloadURL completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+        if (error) {
+            NSLog(@"下载失败: %@", error.localizedDescription);
+            success = NO;
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+        
+        // 移动到目标路径
+        NSError *moveError;
+        [fileManager moveItemAtURL:location toURL:[NSURL fileURLWithPath:binaryDeltaPath] error:&moveError];
+        if (moveError) {
+            NSLog(@"移动文件失败: %@", moveError.localizedDescription);
+            success = NO;
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+        
+        // 设置可执行权限
+        NSError *permError;
+        [fileManager setAttributes:@{NSFilePosixPermissions: @(0755)} ofItemAtPath:binaryDeltaPath error:&permError];
+        if (permError) {
+            NSLog(@"设置权限失败: %@", permError.localizedDescription);
+            success = NO;
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+        
+        // 移除 Gatekeeper 限制
+        NSTask *xattrTask = [[NSTask alloc] init];
+        xattrTask.launchPath = @"/usr/bin/xattr";
+        xattrTask.arguments = @[@"-cr", binaryDeltaPath];
+        [xattrTask launch];
+        [xattrTask waitUntilExit];
+        
+        NSTask *spctlTask = [[NSTask alloc] init];
+        spctlTask.launchPath = @"/usr/sbin/spctl";
+        spctlTask.arguments = @[@"--add", binaryDeltaPath];
+        [spctlTask launch];
+        [spctlTask waitUntilExit];
+        
+        NSLog(@"BinaryDelta 下载并保存到: %@", binaryDeltaPath);
+        success = YES;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    
+    [task resume];
+    
+    // 等待下载完成
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    return success;
+}
 
 - (void)generateUpdate {
     
@@ -195,49 +284,96 @@
         [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
         return;
     }
+    
+    
+    _deltaPath = [self promptForDeltaFilePathWithBaseDir:_deltaDir];
+    if (!_deltaPath) return;
+    [self logMessage:[NSString stringWithFormat:@"📄deltaPath: %@", _deltaPath]];
+    
+    
     // Step 1: Generate Patch
     BOOL success = [SparkleHelper createDeltaFromOldPath:_oldAppDir
-                                                 toNewPath:_NewAppDir
-                                                 outputPath:_deltaDir
-                                                 logBlock:^(NSString *log) {
+                                               toNewPath:_NewAppDir
+                                              outputPath:_deltaPath
+                                                logBlock:^(NSString *log) {
         [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
-
+        
     }];
     
-    
-    
     if (success) {
-        NSString *baseURL = @"https://unigo.com/updates/";
-        NSString *fullURL = [baseURL stringByAppendingPathComponent:_appName];
+        [self logMessage:@"✅ success create delta.update copy to _outputDir"];
         
-        [AppcastGenerator generateAppcastXMLWithAppName: _appName
-                                                version:_NewVersion
-                                           shortVersion:_NewBuildVersion
-                                                pubDate:[NSDate date]
-                                           fullAppPath:_NewAppDir
-                                          fullSignature:@"full_sig"
-                                         deltaFilePath:_deltaDir
-                                      deltaFromVersion:@"1.5"
-                                       deltaSignature:@"delta_sig"
-                                               baseURL:fullURL
-                                           outputPath:_appcastDir];
+        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
+        [FileHelper copyFileAtPath:_deltaPath toDirectory:_outputDir];
+        [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
+                                    message:@"success create delta.update copy to _outputDir."];
 
         
-        NSDictionary *result = [AppcastGenerator parseAppcastXMLFromPath:_appcastDir];
-    //    NSLog(@"%@", result);
-        
-        [self logMessage:[NSString stringWithFormat:@" result of  %@", result]];
-        
-        
-        [self logMessage:@"✅ success create delta.update copy to _outputDir"];
-        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
-        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
-        [FileHelper copyFileAtPath:_deltaDir toDirectory:_outputDir];
     } else {
-        [self logMessage:@"❌ failed create delta.update"];
+        [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
+                                    message:@"failed to create delta.update"];
+        [self logMessage:@"❌ failed to create delta.update"];
     }
 }
 
+- (void)setUpApplyUpdateWindow {
+    // 用纯代码初始化控制器
+    AppUpdateViewController *vc = [[AppUpdateViewController alloc] init];
+
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 400)
+                                                   styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable)
+                                                     backing:NSBackingStoreBuffered
+                                                       defer:NO];
+    [window setTitle:@"Update"];
+    [window setContentViewController:vc];
+
+    NSWindowController *windowController = [[NSWindowController alloc] initWithWindow:window];
+
+    // 显示窗口
+    [windowController showWindow:self];
+    // ✅ 居中窗口
+    [window center];
+
+    // 保存引用防止释放
+    self.updateWindowController = windowController;
+
+}
+
+
+//  a user interaction function . Its purpose is to display a prompt dialog that allows the user to input a delta file name and returns the full file path.
+
+- (NSString *)promptForDeltaFilePathWithBaseDir:(NSString *)baseDir
+{
+    // 创建输入框提示框
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Input appName of delta"];
+    [alert addButtonWithTitle:@"OK"];
+    [alert addButtonWithTitle:@"Cancel"];
+    
+
+    // 添加一个文本输入框作为 accessoryView
+    NSTextField *inputField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
+    [inputField setStringValue:@"appName_Version_update.delta"]; // 默认值
+    [alert setAccessoryView:inputField];
+
+    // 弹出窗口并获取响应
+    NSModalResponse response = [alert runModal];
+    if (response == NSAlertFirstButtonReturn) {
+        NSString *fileName = inputField.stringValue;
+
+        // 简单合法性检查
+        if (fileName.length == 0) {
+            fileName = @"update.delta";
+        }
+        // 取 baseDir 的父目录（去掉旧文件名）
+        NSString *dir = [baseDir stringByDeletingLastPathComponent];
+        return [dir stringByAppendingPathComponent:fileName];
+        
+    } else {
+        // 用户取消输入，返回 nil
+        return nil;
+    }
+}
 
 
 - (void)logAllImportantPaths {
@@ -249,29 +385,6 @@
     [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
 }
 
-- (void)uploadPatchToServer:(NSString *)localPath remoteURL:(NSString *)remoteURL {
-    // 你可以换成 curl / rsync / scp
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/scp";
-    task.arguments = @[localPath, remoteURL];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = pipe;
-
-    NSFileHandle *readHandle = [pipe fileHandleForReading];
-    task.terminationHandler = ^(NSTask *finishedTask) {
-        NSData *outputData = [readHandle readDataToEndOfFile];
-        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self logMessage:@"🚀 upload done"];
-            [self logMessage:output];
-        });
-    };
-
-    [task launch];
-}
 
 #pragma mark - 日志打印
 
@@ -306,6 +419,30 @@
             [fileHandle closeFile];
         }
     });
+}
+
+- (void)checkAndHandleBinaryDelta {
+    NSURL *downloadURL = [NSURL URLWithString:@"http://localhost:5000/static/uploads/BinaryDelta"];
+    
+    BOOL result = checkAndDownloadBinaryDelta(downloadURL);
+    
+    if (result) {
+        [self logMessage:@"✅ Found BinaryDelta."];
+        // 如果还想继续做其它事情可以放这里
+    } else {
+        [self logMessage:@"❌ BinaryDelta not found. Closing app..."];
+        [self showErrorAndExit];
+    }
+}
+
+- (void)showErrorAndExit {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"❌ Required file missing";
+    alert.informativeText = @"BinaryDelta was not found. The application will now close.";
+    [alert addButtonWithTitle:@"Exit"];
+    [alert runModal];
+    
+    [NSApp terminate:nil];
 }
 
 

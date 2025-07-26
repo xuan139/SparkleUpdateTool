@@ -10,6 +10,8 @@ https://github.com/sparkle-project/Sparkle.git
 - Copy `generate_keys` from:  
   `/Users/lijiaxi/Library/Developer/Xcode/DerivedData/Sparkle-fromtshtpkdymdbrcldzhggburwb/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`  
   to `/usr/local/bin/generate_keys`  
+  
+- Meanwhile w/ Website ready ,user can download those from offical website.  
 
 
 ## Step 1: Generate Public and Private Keys Using `generate_keys`
@@ -103,8 +105,9 @@ Sample `appcast.xml` structure:
 ## Step 4:  Way of Updater
 ### SDK for origin app
 - The app must periodically check the remote `appcast.xml`.  
+
 ### Not origin app
-- check manually inside Updater App 
+- check manually delta update Updater App 
 
 
 ## Step 5:  binarydelta apply 

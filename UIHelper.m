@@ -45,7 +45,7 @@
 
     NSTextView *logView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
     logView.editable = NO;
-    logView.font = [NSFont fontWithName:@"Menlo" size:13];
+    logView.font = [NSFont fontWithName:@"Menlo" size:14];
     scrollView.documentView = logView;
 
     if (textView) {
@@ -53,6 +53,14 @@
     }
 
     return scrollView;
+}
+
++ (void)showSuccessAlertWithTitle:(NSString *)title message:(NSString *)message {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = title ?: @"✅ Success";
+    alert.informativeText = message ?: @"Operation completed successfully.";
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
 }
 
 @end
