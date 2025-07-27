@@ -11,6 +11,14 @@
 @implementation FileHelper
 
 
+// 替换文件路径的文件名，保留原扩展名
++ (NSString *)replaceFileNameInPath:(NSString *)originalPath withNewName:(NSString *)newBaseName {
+    NSString *directory = [originalPath stringByDeletingLastPathComponent];
+    NSString *ext = [originalPath pathExtension];
+    NSString *newFileName = [NSString stringWithFormat:@"%@.%@", newBaseName, ext];
+    return [directory stringByAppendingPathComponent:newFileName];
+}
+
 + (NSString *)stripVersionFromAppName:(NSString *)appName {
     NSError *error = nil;
     // 匹配以 `-数字.数字` 结尾的部分（例如：-1.6、-1.6.0 等）

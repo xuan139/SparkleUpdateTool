@@ -10,6 +10,7 @@
 
 @interface FileHelper : NSObject
 
++ (NSString *)replaceFileNameInPath:(NSString *)originalPath withNewName:(NSString *)newBaseName;
 + (NSString *)stripVersionFromAppName:(NSString *)appName;
 + (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
                                    logBlock:(void (^)(NSString *msg))logBlock;

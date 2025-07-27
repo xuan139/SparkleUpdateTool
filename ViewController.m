@@ -225,9 +225,6 @@
                                               outputPath:_deltaPath
                                                 logBlock:^(NSString *log) {
         [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
-        
-        
-        
     }];
     
     if (success) {
@@ -244,7 +241,7 @@
         NSString *latestVersion = _NewVersion;
         NSString *deltaFileName = _appNameDeltaFileName;
         
-        NSString *jsonPath = [self replaceFileNameInPath:_jsonPath withNewName:appName];
+        NSString *jsonPath = [FileHelper replaceFileNameInPath:_jsonPath withNewName:appName];
         NSLog(@"✅ New Path: %@", jsonPath);
 
         BOOL success = [self generateVersionJSONWithAppName:appName
@@ -266,13 +263,6 @@
     }
 }
 
-// 替换文件路径的文件名，保留原扩展名
-- (NSString *)replaceFileNameInPath:(NSString *)originalPath withNewName:(NSString *)newBaseName {
-    NSString *directory = [originalPath stringByDeletingLastPathComponent];
-    NSString *ext = [originalPath pathExtension];
-    NSString *newFileName = [NSString stringWithFormat:@"%@.%@", newBaseName, ext];
-    return [directory stringByAppendingPathComponent:newFileName];
-}
 
 - (void)setUpApplyUpdateWindow {
     // 用纯代码初始化控制器
@@ -340,8 +330,6 @@
     [self logMessage:[NSString stringWithFormat:@"✅ JSON saved to: %@", jsonPath]];
     return YES;
 }
-
-
 
 //  a user interaction function . Its purpose is to display a prompt dialog that allows the user to input a delta file name and returns the full file path.
 
