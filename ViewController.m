@@ -64,7 +64,6 @@
     _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
     _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
     _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
-    
     _jsonPath = [FileHelper fullPathInDocuments:@"sparkle_output/appVersion.json"];
     
     [FileHelper prepareEmptyFileAtPath:_deltaDir];
@@ -114,7 +113,6 @@
                                                           frame:NSMakeRect(padding, y, 160, 30)];
     [self.view addSubview:self.generateUpdateButton];
     
-    
     self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
                                                       target:self
                                                       action:@selector(setUpApplyUpdateWindow)
@@ -136,6 +134,7 @@
             _oldVersion = versionInfo[@"version"];
             _oldBuildVersion = versionInfo[@"build"];
             _appNameOld = versionInfo[@"appName"];
+            _appName = [FileHelper stripVersionFromAppName:_appNameOld];
             [self logMessage:[NSString stringWithFormat:@"Old App:%@ Version: %@ (Build: %@)", _appNameOld, _oldVersion, _oldBuildVersion]];
         }
 
@@ -198,84 +197,6 @@
     return nil;
 }
 
-
-BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
-    NSString *binaryDeltaPath = @"/usr/local/bin/BinaryDelta";
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    // 检查文件是否存在
-    if ([fileManager fileExistsAtPath:binaryDeltaPath]) {
-        NSLog(@"BinaryDelta 已存在: %@", binaryDeltaPath);
-        return YES;
-    }
-    
-    // 确保目标目录存在
-    NSString *directory = [binaryDeltaPath stringByDeletingLastPathComponent];
-    NSError *dirError;
-    [fileManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&dirError];
-    if (dirError) {
-        NSLog(@"创建目录失败: %@", dirError.localizedDescription);
-        return NO;
-    }
-    
-    // 信号量以等待异步下载
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    __block BOOL success = NO;
-    
-    // 下载 BinaryDelta
-    NSURLSessionDownloadTask *task = [[NSURLSession sharedSession] downloadTaskWithURL:downloadURL completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
-        if (error) {
-            NSLog(@"下载失败: %@", error.localizedDescription);
-            success = NO;
-            dispatch_semaphore_signal(semaphore);
-            return;
-        }
-        
-        // 移动到目标路径
-        NSError *moveError;
-        [fileManager moveItemAtURL:location toURL:[NSURL fileURLWithPath:binaryDeltaPath] error:&moveError];
-        if (moveError) {
-            NSLog(@"移动文件失败: %@", moveError.localizedDescription);
-            success = NO;
-            dispatch_semaphore_signal(semaphore);
-            return;
-        }
-        
-        // 设置可执行权限
-        NSError *permError;
-        [fileManager setAttributes:@{NSFilePosixPermissions: @(0755)} ofItemAtPath:binaryDeltaPath error:&permError];
-        if (permError) {
-            NSLog(@"设置权限失败: %@", permError.localizedDescription);
-            success = NO;
-            dispatch_semaphore_signal(semaphore);
-            return;
-        }
-        
-        // 移除 Gatekeeper 限制
-        NSTask *xattrTask = [[NSTask alloc] init];
-        xattrTask.launchPath = @"/usr/bin/xattr";
-        xattrTask.arguments = @[@"-cr", binaryDeltaPath];
-        [xattrTask launch];
-        [xattrTask waitUntilExit];
-        
-        NSTask *spctlTask = [[NSTask alloc] init];
-        spctlTask.launchPath = @"/usr/sbin/spctl";
-        spctlTask.arguments = @[@"--add", binaryDeltaPath];
-        [spctlTask launch];
-        [spctlTask waitUntilExit];
-        
-        NSLog(@"BinaryDelta 下载并保存到: %@", binaryDeltaPath);
-        success = YES;
-        dispatch_semaphore_signal(semaphore);
-    }];
-    
-    [task resume];
-    
-    // 等待下载完成
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    return success;
-}
-
 - (void)generateUpdate {
     
     [self logMessage:@"Begin generate delte.update"];
@@ -318,11 +239,13 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
                                     message:@"success create delta.update copy to _outputDir."];
 
         
-        NSString *appName = _appNameOld;
+        NSString *appName = _appName;
         NSString *lastVersion = _oldVersion;
         NSString *latestVersion = _NewVersion;
         NSString *deltaFileName = _appNameDeltaFileName;
-        NSString *jsonPath = _jsonPath;
+        
+        NSString *jsonPath = [self replaceFileNameInPath:_jsonPath withNewName:appName];
+        NSLog(@"✅ New Path: %@", jsonPath);
 
         BOOL success = [self generateVersionJSONWithAppName:appName
                                                lastVersion:lastVersion
@@ -336,14 +259,19 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
             NSLog(@"❌ Failed to generate Version JSON.");
         }
 
-
-        
-        
     } else {
         [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
                                     message:@"failed to create delta.update"];
         [self logMessage:@"❌ failed to create delta.update"];
     }
+}
+
+// 替换文件路径的文件名，保留原扩展名
+- (NSString *)replaceFileNameInPath:(NSString *)originalPath withNewName:(NSString *)newBaseName {
+    NSString *directory = [originalPath stringByDeletingLastPathComponent];
+    NSString *ext = [originalPath pathExtension];
+    NSString *newFileName = [NSString stringWithFormat:@"%@.%@", newBaseName, ext];
+    return [directory stringByAppendingPathComponent:newFileName];
 }
 
 - (void)setUpApplyUpdateWindow {
@@ -511,7 +439,7 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
 - (void)checkAndHandleBinaryDelta {
     NSURL *downloadURL = [NSURL URLWithString:@"http://localhost:5000/static/uploads/BinaryDelta"];
     
-    BOOL result = checkAndDownloadBinaryDelta(downloadURL);
+    BOOL result = [SparkleHelper checkAndDownloadBinaryDeltaFromURL:downloadURL];
     
     if (result) {
         [self logMessage:@"✅ Found BinaryDelta."];

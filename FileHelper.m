@@ -10,6 +10,21 @@
 
 @implementation FileHelper
 
+
++ (NSString *)stripVersionFromAppName:(NSString *)appName {
+    NSError *error = nil;
+    // 匹配以 `-数字.数字` 结尾的部分（例如：-1.6、-1.6.0 等）
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"-\\d+(\\.\\d+)*$" options:0 error:&error];
+    if (error) {
+        NSLog(@"Regex error: %@", error.localizedDescription);
+        return appName;
+    }
+    NSRange range = NSMakeRange(0, appName.length);
+    return [regex stringByReplacingMatchesInString:appName options:0 range:range withTemplate:@""];
+}
+
+
+
 + (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
                                    logBlock:(void (^)(NSString *msg))logBlock {
     NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];

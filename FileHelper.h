@@ -10,6 +10,7 @@
 
 @interface FileHelper : NSObject
 
++ (NSString *)stripVersionFromAppName:(NSString *)appName;
 + (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
                                    logBlock:(void (^)(NSString *msg))logBlock;
 

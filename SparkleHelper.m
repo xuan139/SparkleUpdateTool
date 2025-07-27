@@ -10,7 +10,81 @@
 
 @implementation SparkleHelper
 
++ (BOOL)checkAndDownloadBinaryDeltaFromURL:(NSURL *)downloadURL {
+    NSString *binaryDeltaPath = @"/usr/local/bin/BinaryDelta";
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    
+    // 如果已存在
+    if ([fileManager fileExistsAtPath:binaryDeltaPath]) {
+        NSLog(@"✅ BinaryDelta exists: %@", binaryDeltaPath);
+        return YES;
+    }
+    
+    // 确保目标目录存在
+    NSString *directory = [binaryDeltaPath stringByDeletingLastPathComponent];
+    NSError *dirError;
+    [fileManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&dirError];
+    if (dirError) {
+        NSLog(@"❌ Failed to create directory: %@", dirError.localizedDescription);
+        return NO;
+    }
+    
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    __block BOOL success = NO;
+    
+    NSURLSessionDownloadTask *task = [[NSURLSession sharedSession]
+        downloadTaskWithURL:downloadURL
+          completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+        if (error) {
+            NSLog(@"❌ Download failed: %@", error.localizedDescription);
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
 
+        NSError *moveError;
+        [fileManager moveItemAtURL:location
+                             toURL:[NSURL fileURLWithPath:binaryDeltaPath]
+                             error:&moveError];
+        if (moveError) {
+            NSLog(@"❌ Move failed: %@", moveError.localizedDescription);
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+
+        // 设置可执行权限
+        NSError *permError;
+        [fileManager setAttributes:@{NSFilePosixPermissions: @(0755)}
+                     ofItemAtPath:binaryDeltaPath
+                            error:&permError];
+        if (permError) {
+            NSLog(@"❌ Set permission failed: %@", permError.localizedDescription);
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+
+        // 移除 Gatekeeper 限制
+        NSTask *xattrTask = [[NSTask alloc] init];
+        xattrTask.launchPath = @"/usr/bin/xattr";
+        xattrTask.arguments = @[@"-cr", binaryDeltaPath];
+        [xattrTask launch];
+        [xattrTask waitUntilExit];
+
+        NSTask *spctlTask = [[NSTask alloc] init];
+        spctlTask.launchPath = @"/usr/sbin/spctl";
+        spctlTask.arguments = @[@"--add", binaryDeltaPath];
+        [spctlTask launch];
+        [spctlTask waitUntilExit];
+
+        NSLog(@"✅ BinaryDelta installed at: %@", binaryDeltaPath);
+        success = YES;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    
+    [task resume];
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    
+    return success;
+}
 + (void)generateKeys {
     NSString *generateKeysPath = @"/usr/local/bin/generate_keys";
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:generateKeysPath]) {

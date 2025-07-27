@@ -11,7 +11,7 @@
 
 @interface SparkleHelper : NSObject
 
-
++ (BOOL)checkAndDownloadBinaryDeltaFromURL:(NSURL *)downloadURL;
 + (void)generateKeys;
 
 + (NSString *)getPublicKey;

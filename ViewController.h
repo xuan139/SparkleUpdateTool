@@ -24,6 +24,7 @@
 @property (nonatomic, strong) NSTextView *logTextView;
 
 // 关键文件路径
+@property (nonatomic, strong) NSString *appName;
 @property (nonatomic, strong) NSString *appNameOld;
 @property (nonatomic, strong) NSString *appNameNew;
 @property (nonatomic, strong) NSString *appNameDeltaFileName;
