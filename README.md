@@ -49,65 +49,15 @@ Writing to temporary file /Users/lijiaxi/Documents/sparkleOldApp/.update.delta.t
 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
 Done!
 
-## Step 3 Write into a appcast.xml and Upload it to website for updater
-Sample `appcast.xml` structure:
-### Not a Must
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>OStation_V15.app Updates</title>
-    <link>https://unigo.com/updates/OStation_V15.app/appcast.xml</link>
-    <description>Latest updates for OStation_V15.app</description>
-    <language>en</language>
-    <item>
-      <title>Version 1.5</title>
-      <sparkle:releaseNotesLink>https://unigo.com/updates/OStation_V15.app/release_notes_1.5.html</sparkle:releaseNotesLink>
-      <pubDate>Tue, 22 Jul 2025 18:28:56 -0500</pubDate>
-      <enclosure url="https://unigo.com/updates/OStation_V15.app/OStation_V15.app" sparkle:version="1.5" sparkle:shortVersionString="1.5" length="447640" type="application/octet-stream" sparkle:edSignature="full_sig" />
-      <sparkle:delta>
-        <enclosure url="https://unigo.com/updates/OStation_V15.app/upadte.delta" sparkle:version="1.5" sparkle:deltaFrom="1.5" length="6250" type="application/octet-stream" sparkle:edSignature="delta_sig" />
-      </sparkle:delta>
-    </item>
-  </channel>
-</rss>
-
-[AppcastGenerator generateAppcastXMLWithAppName:_appName
-                                        version:_NewVersion
-                                   shortVersion:_NewBuildVersion
-                                        pubDate:[NSDate date]
-                                   fullAppPath:_NewAppDir
-                                  fullSignature:@"full_sig"
-                                 deltaFilePath:_deltaDir
-                              deltaFromVersion:@"1.5"
-                               deltaSignature:@"delta_sig"
-                                       baseURL:fullURL
-                                   outputPath:_appcastDir];
-
-                                           
-```
-| 参数名              | 示例值                                | 说明                     |
-|---------------------|----------------------------------------|--------------------------|
-| `appName`           | `"MyApp"`                              | 应用名称                 |
-| `version`           | `"1.2.0"`                              | 完整版本号               |
-| `shortVersion`      | `"1.2"`                                | 展示用短版本号           |
-| `pubDate`           | `NSDate`                               | 发布日期（NSDate 对象）  |
-| `dateString`        | `"Mon, 21 Jul 2025 10:00:00 +0000"`    | RFC 822 格式时间字符串   |
-| `fullOldAppPath`    | `/path/to/MyApp-1.2.0.zip`             | 完整 App 包 zip 文件路径 |
-| `deltaFilePath`     | `/path/to/1.1.0-to-1.2.0.delta`        | 增量更新包 `.delta` 路径 |
-| `fullSignature`     | `"abcdef..."`                          | zip 包签名（Base64，可选） |
-| `deltaSignature`    | `"123456..."`                          | delta 包签名（Base64，可选） |
-| `deltaFromVersion`  | `"1.1.0"`                              | 增量更新来源版本         |
-| `baseURL`           | `"https://server.com/updates/MyApp"`  | 服务器资源 URL 前缀      |
-| `xmlOutputPath`     | `/path/to/appcast.xml`                 | 输出 XML 文件保存路径     |
+## Step 3 upload json file and delta file to website 
+### Must Have
 
 ## Step 4:  Way of Updater
-### SDK for origin app
+### SDK for origin app NOT USED NOW
 - The app must periodically check the remote `appcast.xml`.  
 
-### Not origin app
-- check manually delta update Updater App 
+### Not origin app USED NOW
+- check json file from website to determind whether update or not 
 
 
 ## Step 5:  binarydelta apply 
@@ -128,8 +78,7 @@ Done!
 
 ---
 
-## Additional Notes:  
-### Consider building a version management app to maintain all historical versions of your applications.  
+## Additional Notes:    
 ### To be tested: All target platforms and OStation compatibility.
 
 ---
@@ -150,7 +99,6 @@ graph TD
   J --> K[binarydelta Apply oldApp newApp and delta.update]
   
 ```
-## 新建一个app 用于版本控制和所有app的历史记录，所有app 历史记录
 ## 待测试 所有的游戏平台 和ostation
 
 
