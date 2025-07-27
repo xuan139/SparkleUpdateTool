@@ -65,8 +65,11 @@
     _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
     _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
     
+    _jsonPath = [FileHelper fullPathInDocuments:@"sparkle_output/appVersion.json"];
+    
     [FileHelper prepareEmptyFileAtPath:_deltaDir];
     [FileHelper prepareEmptyFileAtPath:_logFileDir];
+    [FileHelper prepareEmptyFileAtPath:_jsonPath];
      
     [self logAllImportantPaths];
 }
@@ -132,9 +135,10 @@
         if (versionInfo) {
             _oldVersion = versionInfo[@"version"];
             _oldBuildVersion = versionInfo[@"build"];
-            [self logMessage:[NSString stringWithFormat:@"📦 OLD App Build Version: %@ (Build: %@)", _oldVersion, _oldBuildVersion]];
+            _appNameOld = versionInfo[@"appName"];
+            [self logMessage:[NSString stringWithFormat:@"Old App:%@ Version: %@ (Build: %@)", _appNameOld, _oldVersion, _oldBuildVersion]];
         }
-        [self logMessage:[NSString stringWithFormat:@"✅ App Name: %@", _appName]];
+
         
     }
 }
@@ -149,14 +153,14 @@
             [self logMessage:msg]; // self 是 ViewController 实例
         }];
         if (versionInfo) {
-            _appName = [_NewAppDir lastPathComponent];
+//            _appName = [_NewAppDir lastPathComponent];
             _NewVersion = versionInfo[@"version"];
             _NewBuildVersion = versionInfo[@"build"];
-            [self logMessage:[NSString stringWithFormat:@"📦 NEW App Build Version: %@ (Build: %@)", _NewVersion, _NewBuildVersion]];
+            _appNameNew = versionInfo[@"appName"];
+            [self logMessage:[NSString stringWithFormat:@"New App:%@ Version: %@ (Build: %@)", _appNameNew, _NewVersion, _NewBuildVersion]];
         }
     }
 }
-
 
 - (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -287,6 +291,9 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
     
     
     _deltaPath = [self promptForDeltaFilePathWithBaseDir:_deltaDir];
+    _appNameDeltaFileName = [_deltaPath lastPathComponent];  // 结果是 "OStation-1.6-1.7.delta"
+
+    
     if (!_deltaPath) return;
     [self logMessage:[NSString stringWithFormat:@"📄deltaPath: %@", _deltaPath]];
     
@@ -298,6 +305,8 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
                                                 logBlock:^(NSString *log) {
         [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
         
+        
+        
     }];
     
     if (success) {
@@ -308,6 +317,27 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
         [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
                                     message:@"success create delta.update copy to _outputDir."];
 
+        
+        NSString *appName = _appNameOld;
+        NSString *lastVersion = _oldVersion;
+        NSString *latestVersion = _NewVersion;
+        NSString *deltaFileName = _appNameDeltaFileName;
+        NSString *jsonPath = _jsonPath;
+
+        BOOL success = [self generateVersionJSONWithAppName:appName
+                                               lastVersion:lastVersion
+                                             latestVersion:latestVersion
+                                              deltaFileName:deltaFileName
+                                                  jsonPath:jsonPath];
+
+        if (success) {
+            NSLog(@"✅ Version JSON generated successfully!");
+        } else {
+            NSLog(@"❌ Failed to generate Version JSON.");
+        }
+
+
+        
         
     } else {
         [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
@@ -339,6 +369,51 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
 
 }
 
+- (BOOL)generateVersionJSONWithAppName:(NSString *)appName
+                           lastVersion:(NSString *)lastVersion
+                         latestVersion:(NSString *)latestVersion
+                         deltaFileName:(NSString *)deltaFileName
+                              jsonPath:(NSString *)jsonPath{
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+    NSString *releaseDate = [formatter stringFromDate:[NSDate date]];
+
+    NSDictionary *jsonDict = @{
+        @"appName": appName ?: @"UnknownApp",
+        @"lastVersion": lastVersion ?: @"0.0.0",
+        @"latestVersion": latestVersion ?: @"0.0.0",
+        @"releaseDate": releaseDate,
+        @"deltaFileName": deltaFileName ?: @"",
+        @"jsonPath": jsonPath ?: @""
+    };
+
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonDict
+                                                       options:NSJSONWritingPrettyPrinted
+                                                         error:&error];
+    if (error) {
+        NSLog(@"❌ Failed to serialize JSON: %@", error.localizedDescription);
+        return NO;
+    }
+    
+//    NSLog(@"JSON dict: %@", jsonDict);
+//    NSLog(@"outputPath: %@", jsonPath);
+//    NSLog(@"jsonData length: %lu", (unsigned long)jsonData.length);
+
+    BOOL success = [jsonData writeToFile:jsonPath atomically:YES];
+    if (!success) {
+        NSLog(@"❌ Failed to write JSON to path: %@", jsonPath);
+        [self logMessage:[NSString stringWithFormat:@"❌ Failed to write JSON to path: %@", jsonPath]];
+        
+        return NO;
+    }
+
+    NSLog(@"✅ JSON saved to: %@", jsonPath);
+    [self logMessage:[NSString stringWithFormat:@"✅ JSON saved to: %@", jsonPath]];
+    return YES;
+}
+
+
 
 //  a user interaction function . Its purpose is to display a prompt dialog that allows the user to input a delta file name and returns the full file path.
 
@@ -353,7 +428,19 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
 
     // 添加一个文本输入框作为 accessoryView
     NSTextField *inputField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
-    [inputField setStringValue:@"appName_Version_update.delta"]; // 默认值
+    
+    NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@.delta",
+                               _appNameOld ?: @"UnknownApp",
+                               _NewVersion ?: @"0.0.0"];
+    
+//    NSString *baseName = [deltaFileName stringByDeletingPathExtension];
+//    NSArray *components = [baseName componentsSeparatedByString:@"-"];
+//    // components = @[ @"OStation", @"1.6", @"1.7" ]
+//    NSString *appName = components[0];
+//    NSString *oldVersion = components[1];
+//    NSString *newVersion = components[2];
+    
+    [inputField setStringValue:deltaFileName]; // 默认值
     [alert setAccessoryView:inputField];
 
     // 弹出窗口并获取响应
@@ -380,7 +467,7 @@ BOOL checkAndDownloadBinaryDelta(NSURL *downloadURL) {
     [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
     [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",   _deltaDir]];
     [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
-    [self logMessage:[NSString stringWithFormat:@"appcastDir: %@", _appcastDir]];
+    [self logMessage:[NSString stringWithFormat:@"jsonPath: %@", _jsonPath]];
     [self logMessage:[NSString stringWithFormat:@"📄 oldAppPath: %@", _oldAppDir]];
     [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
 }

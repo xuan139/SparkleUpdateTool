@@ -24,7 +24,9 @@
 @property (nonatomic, strong) NSTextView *logTextView;
 
 // 关键文件路径
-@property (nonatomic, strong) NSString *appName;
+@property (nonatomic, strong) NSString *appNameOld;
+@property (nonatomic, strong) NSString *appNameNew;
+@property (nonatomic, strong) NSString *appNameDeltaFileName;
 
 @property (nonatomic, strong) NSString *oldVersion;
 @property (nonatomic, strong) NSString *oldBuildVersion;
@@ -47,6 +49,8 @@
 @property (nonatomic, strong) NSString *outputDir;
 @property (nonatomic, strong) NSString *logFileDir;
 @property (nonatomic, strong) NSString *appcastDir;
+
+@property (nonatomic, strong) NSString *jsonPath;
 
 @property (nonatomic, strong) NSWindowController *updateWindowController;
 

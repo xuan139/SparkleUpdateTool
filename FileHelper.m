@@ -24,15 +24,17 @@
 
     logBlock([NSString stringWithFormat:@"✅read Info.plist: %@", infoPlistPath]);
 
-    
     NSString *version = infoPlist[@"CFBundleShortVersionString"] ?: @"";
     NSString *build = infoPlist[@"CFBundleVersion"] ?: @"";
+    NSString *appName = infoPlist[@"CFBundleName"] ?: infoPlist[@"CFBundleExecutable"] ?: @"Unknown";
 
     return @{
+        @"appName": appName,
         @"version": version,
         @"build": build
     };
 }
+
 
 
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath {
