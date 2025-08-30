@@ -14,20 +14,12 @@ https://github.com/sparkle-project/Sparkle.git
 - Meanwhile w/ Website ready ,user can download those from offical website.  
 
 
-## Step 0 : Generate Public and Private Keys Using `generate_keys`
+## Step 1 : Generate Public and Private Keys Using `generate_keys`
 
 ### Not a Must
 - If you're on macOS, the private key will be saved into your Keychain, and the public key will be printed to the console.
 - Add the public key to the `Info.plist` of each app you want to update.
 - If you're implementing the update system yourself, make sure to extract and verify the public key manually for signature validation.
-
-
-## Step 1
-签名成功了，对于SteamMetal.4.01.01.app 做了以下改动，
-
-### 1. 删除了c_driver 
-### 2. mv /Users/lijiaxi/Documents/sparkleOldApp/SteamMetal.4.01.01.app/Contents/Frameworks/renderer/d3dmetal \
-   /Users/lijiaxi/Documents/sparkleOldApp/SteamMetal.4.01.01.app/Contents/Resources/
 
 
 ## Step 2:   binarydelta create update.delta

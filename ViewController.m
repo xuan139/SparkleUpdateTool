@@ -8,7 +8,7 @@
 #import "ViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-#import "SparkleHelper.h"
+#import "BinaryDeltaManager.h"
 #import "FileHelper.h"
 #import "AppcastGenerator.h"
 #import "AppUpdateViewController.h"
@@ -25,7 +25,7 @@
     [super viewDidLoad];
     [self setupUI];
     [self setupDir];
-    [self checkAndHandleBinaryDelta];
+//    [self checkAndHandleBinaryDelta];
 }
 
 #pragma mark - setupUI
@@ -220,7 +220,7 @@
     
     
     // Step 1: Generate Patch
-    BOOL success = [SparkleHelper createDeltaFromOldPath:_oldAppDir
+    BOOL success = [BinaryDeltaManager createDeltaFromOldPath:_oldAppDir
                                                toNewPath:_NewAppDir
                                               outputPath:_deltaPath
                                                 logBlock:^(NSString *log) {
@@ -424,19 +424,19 @@
     });
 }
 
-- (void)checkAndHandleBinaryDelta {
-    NSURL *downloadURL = [NSURL URLWithString:@"http://localhost:5000/static/uploads/BinaryDelta"];
-    
-    BOOL result = [SparkleHelper checkAndDownloadBinaryDeltaFromURL:downloadURL];
-    
-    if (result) {
-        [self logMessage:@"✅ Found BinaryDelta."];
-        // 如果还想继续做其它事情可以放这里
-    } else {
-        [self logMessage:@"❌ BinaryDelta not found. Closing app..."];
-        [self showErrorAndExit];
-    }
-}
+//- (void)checkAndHandleBinaryDelta {
+//    NSURL *downloadURL = [NSURL URLWithString:@"http://localhost:5000/static/uploads/BinaryDelta"];
+//    
+//    BOOL result = [BinaryDeltaManager checkAndDownloadBinaryDeltaFromURL:downloadURL];
+//
+//    if (result) {
+//        [self logMessage:@"✅ Found BinaryDelta."];
+//        // 如果还想继续做其它事情可以放这里
+//    } else {
+//        [self logMessage:@"❌ BinaryDelta not found. Closing app..."];
+//        [self showErrorAndExit];
+//    }
+//}
 
 - (void)showErrorAndExit {
     NSAlert *alert = [[NSAlert alloc] init];

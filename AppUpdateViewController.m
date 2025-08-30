@@ -10,6 +10,7 @@
 #import "AppUpdateViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "UIHelper.h"
+#import "BinaryDeltaManager.h"
 
 @implementation AppUpdateViewController
 
@@ -167,7 +168,7 @@
     NSString *newDir = [[oldAppDirPath stringByDeletingLastPathComponent] stringByAppendingPathComponent:NewAppName];
 
     // 调用 applyDelta
-    BOOL success = [self applyDelta:self.deltaDir
+    BOOL success = [BinaryDeltaManager applyDelta:self.deltaDir
                           toOldDir:self.oldAppDir
                            toNewDir:newDir
                            logBlock:^(NSString *log) {
@@ -185,43 +186,43 @@
     }
 }
 
--(BOOL)applyDelta:(NSString *)deltaPath
-         toOldDir:(NSString *)oldDir
-         toNewDir:(NSString *)newDir
-         logBlock:(void (^)(NSString *log))logBlock {
-
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/local/bin/binarydelta";
-    task.arguments = @[@"apply", @"--verbose", oldDir, newDir, deltaPath];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = pipe;
-
-    NSFileHandle *readHandle = [pipe fileHandleForReading];
-
-    @try {
-        [task launch];
-        [task waitUntilExit];
-    } @catch (NSException *exception) {
-        NSString *errorMsg = [NSString stringWithFormat:@"❌ Failed to launch binarydelta apply: %@", exception.reason];
-        if (logBlock) logBlock(errorMsg);
-        return NO;
-    }
-
-    NSData *outputData = [readHandle readDataToEndOfFile];
-    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-    
-    if (logBlock) logBlock(output);
-
-    if (task.terminationStatus == 0) {
-        if (logBlock) logBlock([NSString stringWithFormat:@"✅ apply delta success: %@", newDir]);
-        return YES;
-    } else {
-        if (logBlock) logBlock([NSString stringWithFormat:@"❌ apply delta failed\n%@", output]);
-        return NO;
-    }
-}
+//-(BOOL)applyDelta:(NSString *)deltaPath
+//         toOldDir:(NSString *)oldDir
+//         toNewDir:(NSString *)newDir
+//         logBlock:(void (^)(NSString *log))logBlock {
+//
+//    NSTask *task = [[NSTask alloc] init];
+//    task.launchPath = @"/usr/local/bin/binarydelta";
+//    task.arguments = @[@"apply", @"--verbose", oldDir, newDir, deltaPath];
+//
+//    NSPipe *pipe = [NSPipe pipe];
+//    task.standardOutput = pipe;
+//    task.standardError = pipe;
+//
+//    NSFileHandle *readHandle = [pipe fileHandleForReading];
+//
+//    @try {
+//        [task launch];
+//        [task waitUntilExit];
+//    } @catch (NSException *exception) {
+//        NSString *errorMsg = [NSString stringWithFormat:@"❌ Failed to launch binarydelta apply: %@", exception.reason];
+//        if (logBlock) logBlock(errorMsg);
+//        return NO;
+//    }
+//
+//    NSData *outputData = [readHandle readDataToEndOfFile];
+//    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+//    
+//    if (logBlock) logBlock(output);
+//
+//    if (task.terminationStatus == 0) {
+//        if (logBlock) logBlock([NSString stringWithFormat:@"✅ apply delta success: %@", newDir]);
+//        return YES;
+//    } else {
+//        if (logBlock) logBlock([NSString stringWithFormat:@"❌ apply delta failed\n%@", output]);
+//        return NO;
+//    }
+//}
 
 - (void)cancelButtonPressed {
     [self logMessage:@"🚫 Cancel"];
