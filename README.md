@@ -1,8 +1,8 @@
 # SparkleUpdateTool for Publisher / Updater
 
 # Fork and Clone  
-https://github.com/sparkle-project/Sparkle.git
-
+- https://github.com/sparkle-project/Sparkle.git
+- Copy BinaryDelta to App Folder
 
 ## Step 1 : Generate Public and Private Keys Using `generate_keys`
 
