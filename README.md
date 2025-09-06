@@ -31,10 +31,11 @@ binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
 - 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
 - Done!
 
-## Step 3 upload json file and delta file to https://unigo.ai/downloads
+## Step 3 upload json file and delta file to Website 
 ### Must Have
 
 - https://unigo.ai/upload
+- https://unigo.ai/downloads
 
 ## Step 4:  Way of Updater
 - OStation App sholud check Json file on unigo.ai 
