@@ -31,7 +31,7 @@ binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
 - 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
 - Done!
 
-## Step 3 upload json file and delta file to https://unigo.ai 
+## Step 3 upload json file and delta file to https://unigo.ai/download
 ### Must Have
 
 - https://unigo.ai/upload
