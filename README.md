@@ -3,16 +3,6 @@
 # Fork and Clone  
 https://github.com/sparkle-project/Sparkle.git
 
-# Build Release  Version4.1
-
-- Copy `binarydelta` from the `Release` folder to `/usr/local/bin/binarydelta`  
-- Copy `sign_update` from the `Release` folder to `/usr/local/bin/sign_update`  
-- Copy `generate_keys` from:  
-  `/Users/lijiaxi/Library/Developer/Xcode/DerivedData/Sparkle-fromtshtpkdymdbrcldzhggburwb/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`  
-  to `/usr/local/bin/generate_keys`  
-  
-- Meanwhile w/ Website ready ,user can download those from offical website.  
-
 
 ## Step 1 : Generate Public and Private Keys Using `generate_keys`
 
@@ -22,7 +12,7 @@ https://github.com/sparkle-project/Sparkle.git
 - If you're implementing the update system yourself, make sure to extract and verify the public key manually for signature validation.
 
 
-## Step 2:   binarydelta create update.delta
+## Step 2: Binarydelta create update.delta
 
 ### Must Have
 binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
@@ -41,16 +31,11 @@ Writing to temporary file /Users/lijiaxi/Documents/sparkleOldApp/.update.delta.t
 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
 Done!
 
-## Step 3 upload json file and delta file to website 
+## Step 3 upload json file and delta file to unigo.ai 
 ### Must Have
 
 ## Step 4:  Way of Updater
-### SDK for origin app NOT USED NOW
-- The app must periodically check the remote `appcast.xml`.  
-
-### Not origin app USED NOW
-- check json file from website to determind whether update or not 
-
+### App sholud check json file on unigo.ai 
 
 ## Step 5:  binarydelta apply 
 binarydelta apply OStation.app NewStation.app update.delta --verbose
@@ -68,12 +53,6 @@ Patching...
 Verifying destination...
 Done!
 
----
-
-## Additional Notes:    
-### To be tested: All target platforms and OStation compatibility.
-
----
 
 ## Flowchart
 
@@ -91,7 +70,6 @@ graph TD
   J --> K[binarydelta Apply oldApp newApp and delta.update]
   
 ```
-## 待测试 所有的游戏平台 和ostation
 
 
 
