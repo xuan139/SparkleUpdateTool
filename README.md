@@ -31,17 +31,17 @@ binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
 - 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
 - Done!
 
-## Step 3 upload json file and delta file to Website 
+## Step 3 Upload json file and delta file to Website 
 ### Must Have
 
 - https://unigo.ai/upload
 - https://unigo.ai/downloads
 
-## Step 4:  Way of Updater
+## Step 4: Update
 - OStation App sholud check Json file on unigo.ai 
 - If OStation App Version in Json file is advanced than local App Version then Update it 
 
-## Step 5:  binarydelta apply 
+## Step 5:  Binarydelta apply 
 - binarydelta apply OStation.app NewStation.app update.delta --verbose
 - Applying version 4.1 patch...
 - Verifying source...
