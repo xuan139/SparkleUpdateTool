@@ -35,7 +35,8 @@ binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
 ### Must Have
 
 ## Step 4:  Way of Updater
-### App sholud check json file on unigo.ai 
+### OStation App sholud check Json file on unigo.ai 
+### If OStation App Version in Json file is advanced than local App Version then Update it 
 
 ## Step 5:  binarydelta apply 
 - binarydelta apply OStation.app NewStation.app update.delta --verbose
