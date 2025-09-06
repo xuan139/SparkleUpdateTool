@@ -17,19 +17,19 @@ https://github.com/sparkle-project/Sparkle.git
 ### Must Have
 binarydelta create --verbose ./OStation.app ./OStationNew.app ./update.delta
 
-Creating version 4.1 patch using default compression...
-Processing source, ./OStation.app...
-Processing destination, ./OStationNew.app...
-Generating delta...
-Writing to temporary file /Users/lijiaxi/Documents/sparkleOldApp/.update.delta.tmp...
-✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/Info.plist
-✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/NSWindowController-B8D-0N-5wS.nib
-✅  Added /Contents/Resources/buy.html
-✏️  Updated /Contents/Resources/download.html
-🔨  Diffed /Contents/_CodeSignature/CodeResources
-🔨  Diffed /Contents/MacOS/OStation
-🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
-Done!
+- Creating version 4.1 patch using default compression...
+- Processing source, ./OStation.app...
+- Processing destination, ./OStationNew.app...
+- Generating delta...
+- Writing to temporary file /Users/lijiaxi/Documents/sparkleOldApp/.update.delta.tmp...
+- ✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/Info.plist
+- ✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/NSWindowController-B8D-0N-5wS.nib
+- ✅  Added /Contents/Resources/buy.html
+- ✏️  Updated /Contents/Resources/download.html
+- 🔨  Diffed /Contents/_CodeSignature/CodeResources
+- 🔨  Diffed /Contents/MacOS/OStation
+- 🔨  Diffed /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
+- Done!
 
 ## Step 3 upload json file and delta file to unigo.ai 
 ### Must Have
@@ -38,20 +38,20 @@ Done!
 ### App sholud check json file on unigo.ai 
 
 ## Step 5:  binarydelta apply 
-binarydelta apply OStation.app NewStation.app update.delta --verbose
-Applying version 4.1 patch...
-Verifying source...
-Copying files...
-Patching...
-✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/Info.plist
-✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/NSWindowController-B8D-0N-5wS.nib
-✅  Added /Contents/Resources/buy.html
-✏️  Updated /Contents/Resources/download.html
-🔨  Patched /Contents/_CodeSignature/CodeResources
-🔨  Patched /Contents/MacOS/OStation
-🔨  Patched /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
-Verifying destination...
-Done!
+- binarydelta apply OStation.app NewStation.app update.delta --verbose
+- Applying version 4.1 patch...
+- Verifying source...
+- Copying files...
+- Patching...
+- ✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/Info.plist
+- ✏️  Updated /Contents/Resources/Base.lproj/Main.storyboardc/NSWindowController-B8D-0N-5wS.nib
+- ✅  Added /Contents/Resources/buy.html
+- ✏️  Updated /Contents/Resources/download.html
+- 🔨  Patched /Contents/_CodeSignature/CodeResources
+- 🔨  Patched /Contents/MacOS/OStation
+- 🔨  Patched /Contents/Resources/Base.lproj/Main.storyboardc/MainMenu.nib
+- Verifying destination...
+- Done!
 
 
 ## Flowchart
