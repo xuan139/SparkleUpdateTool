@@ -16,6 +16,7 @@
                                    logBlock:(void (^)(NSString *msg))logBlock;
 
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath;
++ (NSString *)strfileSizeAtPath:(NSString *)filePath;
 + (NSString *)firstAppFileNameInPath:(NSString *)directoryPath;
 + (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir;
 + (NSString *)generateSubdirectory:(NSString *)subDirName;

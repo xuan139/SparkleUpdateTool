@@ -58,6 +58,36 @@
     };
 }
 
++ (NSString *)strfileSizeAtPath:(NSString *)filePath {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *error;
+    NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:&error];
+    
+    if (!attributes) {
+        NSLog(@"获取文件大小失败: %@ - %@", filePath, error.localizedDescription);
+        return @"0";
+    }
+
+    unsigned long long totalSize = 0;
+
+    // 检查是否为文件夹（如 .app 包）
+    if ([attributes[NSFileType] isEqualToString:NSFileTypeDirectory]) {
+        NSDirectoryEnumerator *enumerator = [fileManager enumeratorAtURL:[NSURL fileURLWithPath:filePath]
+                                              includingPropertiesForKeys:@[NSURLTotalFileSizeKey]
+                                                                 options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                            errorHandler:nil];
+        for (NSURL *url in enumerator) {
+            NSNumber *fileSize;
+            [url getResourceValue:&fileSize forKey:NSURLTotalFileSizeKey error:nil];
+            totalSize += fileSize.unsignedLongLongValue;
+        }
+    } else {
+        totalSize = [attributes[NSFileSize] unsignedLongLongValue];
+    }
+
+    // 转成 NSString
+    return [NSString stringWithFormat:@"%llu", totalSize];
+}
 
 
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath {

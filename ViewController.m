@@ -114,15 +114,19 @@
     CGFloat jsonStartX = startX + labelWidth + fieldWidth + 150;
     CGFloat jsonStartY = startY+20;
     CGFloat jsonWidth = 500;
-    CGFloat jsonHeight = 600;
+    CGFloat jsonHeight = 620;
 
     self.jsonScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight, jsonWidth, jsonHeight)];
     self.jsonScrollView.hasVerticalScroller = YES;
     self.jsonScrollView.autohidesScrollers = YES;
     [self.view addSubview:self.jsonScrollView];
 
+    
     // Container
     NSView *jsonContainer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, jsonWidth, jsonHeight)];
+    
+    jsonContainer.autoresizingMask = NSViewWidthSizable;
+
     self.jsonScrollView.documentView = jsonContainer;
 
     // 控件尺寸
@@ -130,7 +134,7 @@
     CGFloat labelWidthJSON = 120;
     CGFloat fieldWidthJSON = jsonWidth - labelWidthJSON - padding*2;
     CGFloat fieldHeight = 24;
-    verticalSpacing = 40;
+    verticalSpacing = 20;
 
     // 坐标从顶部向下
     __block CGFloat currentY = jsonHeight - fieldHeight - padding;
@@ -244,10 +248,10 @@
                    withPrefix:(NSString *)prefix
                        indent:(CGFloat)indent {
 
-    CGFloat padding = 10;
+    CGFloat padding = 5;
     CGFloat labelWidth = 150;
-    CGFloat fieldWidth = 220;
-    CGFloat rowHeight = 30;
+    CGFloat fieldWidth = 280;
+    CGFloat rowHeight = 20;
     CGFloat verticalSpacing = 8;
 
     [json enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
@@ -425,52 +429,6 @@
     [self.view addSubview:self.applyUpdateButton];
 }
 
-
-//- (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
-//                                     action:(SEL)selector
-//                                  yPosition:(CGFloat)y {
-//    CGFloat padding = 20;
-//    CGFloat labelWidth = 100;
-//    CGFloat fieldWidth = 400;
-//    CGFloat buttonWidth = 130;
-//    CGFloat height = 24;
-//
-//    NSTextField *label = [UIHelper createLabelWithText:labelText
-//                                                 frame:NSMakeRect(padding, y, labelWidth, height)];
-//    [self.view addSubview:label];
-//
-//    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
-//    [self.view addSubview:field];
-//
-//    NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
-//    NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
-//                                                target:self
-//                                                action:selector
-//                                                 frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
-//    [self.view addSubview:button];
-//
-//    return @{
-//        @"label": label,
-//        @"field": field,
-//        @"button": button
-//    };
-//}
-//
-//
-//- (void)setupGenerateButtonAtY:(CGFloat)y {
-//    CGFloat padding = 20;
-//    self.generateUpdateButton = [UIHelper createButtonWithTitle:@"generate delta"
-//                                                         target:self
-//                                                         action:@selector(generateUpdate)
-//                                                          frame:NSMakeRect(padding, y, 160, 30)];
-//    [self.view addSubview:self.generateUpdateButton];
-//    
-//    self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
-//                                                      target:self
-//                                                      action:@selector(setUpApplyUpdateWindow)
-//                                                       frame:NSMakeRect(padding*12, y, 160, 30)];
-//    [self.view addSubview:self.applyUpdateButton];
-//}
 #pragma mark - Button Actions
 - (void)selectOldApp {
     
@@ -574,7 +532,7 @@
     // Step 1: Generate Patch
     BOOL success = [BinaryDeltaManager createDeltaFromOldPath:_oldAppDir
                                                toNewPath:_NewAppDir
-                                              outputPath:_deltaPath
+                                                outputPath:_deltaPath
                                                 logBlock:^(NSString *log) {
         [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
     }];
@@ -583,24 +541,70 @@
         [self logMessage:@"✅ success create delta.update copy to _outputDir"];
         
         [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
+        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
         [FileHelper copyFileAtPath:_deltaPath toDirectory:_outputDir];
         [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
                                     message:@"success create delta.update copy to _outputDir."];
 
-        
+        NSString *baseURL = @"https://unigo.ai/uploads/";
         NSString *appName = _appName;
         NSString *lastVersion = _oldVersion;
         NSString *latestVersion = _NewVersion;
-        NSString *deltaFileName = _appNameDeltaFileName;
-        
         NSString *jsonPath = [FileHelper replaceFileNameInPath:_jsonPath withNewName:appName];
         NSLog(@"✅ New Path: %@", jsonPath);
+        NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@-%@.delta",
+                                   _appName, lastVersion, latestVersion];
+        NSString *deltaURL = [baseURL stringByAppendingString:deltaFileName];
+        NSString *downloadURL = [baseURL stringByAppendingString:
+                                 [NSString stringWithFormat:@"%@-%@.zip", _appName, latestVersion]];
 
-        BOOL success = [self generateVersionJSONWithAppName:appName
-                                               lastVersion:lastVersion
-                                             latestVersion:latestVersion
-                                              deltaFileName:deltaFileName
-                                                  jsonPath:jsonPath];
+        
+        // 拼接文件路径
+        NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
+
+        NSString *deltaFilePath = [outputDir stringByAppendingPathComponent:deltaFileName];
+        NSString *appFilePath = [outputDir stringByAppendingPathComponent:
+                                 [NSString stringWithFormat:@"%@-%@.app", _appName, latestVersion]];
+
+        // 先压缩，得到 zip 路径
+        NSString *zipFilePath = [FileHelper zipAppAtPath:appFilePath
+                                             logBlock:^(NSString *message) {
+            NSLog(@"%@", message);
+
+        }];
+
+        // 再计算压缩后的 zip 大小
+        unsigned long long sizeInBytes = [FileHelper fileSizeAtPath:zipFilePath];
+        NSString *fileSize = [NSString stringWithFormat:@"%llu", sizeInBytes];
+
+        NSLog(@"zip 文件路径: %@", zipFilePath);
+        NSLog(@"zip 文件大小: %@", fileSize);
+
+
+        // 计算大小（字节）
+        NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
+
+        NSString *wineVersion = @"10.9";
+        NSArray<NSString *> *preservePaths = @[@"steamapps", @"userdata", @"config"];
+
+        BOOL success = [self generateFullVersionJSONWithAppName:appName
+                                                  lastVersion:lastVersion
+                                                 latestVersion:latestVersion
+                                                 deltaFileName:deltaFileName
+                                                     deltaSize:deltaSize
+                                                      fileSize:fileSize
+                                                       deltaURL:deltaURL
+                                                   downloadURL:downloadURL
+                                                    wineVersion:wineVersion
+                                                  preservePaths:preservePaths
+                                                        jsonPath:jsonPath];
+
+        if (success) {
+            NSLog(@"✅ JSON 文件生成成功: %@", jsonPath);
+        } else {
+            NSLog(@"❌ JSON 文件生成失败");
+        }
 
         if (success) {
             NSLog(@"✅ Version JSON generated successfully!");
@@ -638,6 +642,83 @@
     self.updateWindowController = windowController;
 
 }
+
+
+- (BOOL)generateFullVersionJSONWithAppName:(NSString *)appName
+                                lastVersion:(NSString *)lastVersion
+                               latestVersion:(NSString *)latestVersion
+                               deltaFileName:(NSString *)deltaFileName
+                                   deltaSize:(NSString *)deltaSize
+                                    fileSize:(NSString *)fileSize
+                                     deltaURL:(NSString *)deltaURL
+                                     downloadURL:(NSString *)downloadURL
+                                     wineVersion:(NSString *)wineVersion
+                                     preservePaths:(NSArray<NSString *> *)preservePaths
+                                        jsonPath:(NSString *)jsonPath
+{
+    if (!appName) appName = @"UnknownApp";
+    if (!lastVersion) lastVersion = @"0.0.0";
+    if (!latestVersion) latestVersion = @"0.0.0";
+    if (!deltaFileName) deltaFileName = @"";
+    if (!deltaSize) deltaSize = @"0";
+    if (!fileSize) fileSize = @"0";
+    if (!deltaURL) deltaURL = @"";
+    if (!downloadURL) downloadURL = @"";
+    if (!wineVersion) wineVersion = @"";
+    if (!preservePaths) preservePaths = @[@"steamapps", @"userdata", @"config"];
+
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateFormat = @"yyyy-MM-dd";
+    NSString *releaseDate = [formatter stringFromDate:[NSDate date]];
+
+    // 将 preservePaths 转成字典格式，保持原来的数字键顺序
+    NSMutableDictionary *preserveDict = [NSMutableDictionary dictionary];
+    for (NSInteger i = 0; i < preservePaths.count; i++) {
+        preserveDict[@(i).stringValue] = preservePaths[i];
+    }
+
+    NSDictionary *wineConfig = @{
+        @"bottleName": appName,
+        @"wineVersion": wineVersion,
+        @"preservePaths": preserveDict
+    };
+
+    NSDictionary *jsonDict = @{
+        @"appName": appName,
+        @"lastVersion": lastVersion,
+        @"latestVersion": latestVersion,
+        @"deltaFileName": deltaFileName,
+        @"deltaSize": deltaSize,
+        @"fileSize": fileSize,
+        @"deltaURL": deltaURL,
+        @"downloadURL": downloadURL,
+        @"releaseDate": releaseDate,
+        @"minimumSystemVersion": @"13.5",
+        @"description": [NSString stringWithFormat:@"%@ client update", appName],
+        @"signature": @"base64_encoded_signature",
+        @"wineConfig": wineConfig
+    };
+
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonDict
+                                                       options:NSJSONWritingPrettyPrinted
+                                                         error:&error];
+    if (error) {
+        NSLog(@"❌ Failed to serialize JSON: %@", error.localizedDescription);
+        return NO;
+    }
+
+    BOOL success = [jsonData writeToFile:jsonPath atomically:YES];
+    if (!success) {
+        NSLog(@"❌ Failed to write JSON to path: %@", jsonPath);
+        return NO;
+    }
+
+    NSLog(@"✅ JSON saved to: %@", jsonPath);
+    return YES;
+}
+
+
 
 - (BOOL)generateVersionJSONWithAppName:(NSString *)appName
                            lastVersion:(NSString *)lastVersion
@@ -700,14 +781,7 @@
     NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@.delta",
                                _appNameOld ?: @"UnknownApp",
                                _NewVersion ?: @"0.0.0"];
-    
-//    NSString *baseName = [deltaFileName stringByDeletingPathExtension];
-//    NSArray *components = [baseName componentsSeparatedByString:@"-"];
-//    // components = @[ @"OStation", @"1.6", @"1.7" ]
-//    NSString *appName = components[0];
-//    NSString *oldVersion = components[1];
-//    NSString *newVersion = components[2];
-    
+
     [inputField setStringValue:deltaFileName]; // 默认值
     [alert setAccessoryView:inputField];
 
@@ -776,19 +850,7 @@
     });
 }
 
-//- (void)checkAndHandleBinaryDelta {
-//    NSURL *downloadURL = [NSURL URLWithString:@"http://localhost:5000/static/uploads/BinaryDelta"];
-//    
-//    BOOL result = [BinaryDeltaManager checkAndDownloadBinaryDeltaFromURL:downloadURL];
-//
-//    if (result) {
-//        [self logMessage:@"✅ Found BinaryDelta."];
-//        // 如果还想继续做其它事情可以放这里
-//    } else {
-//        [self logMessage:@"❌ BinaryDelta not found. Closing app..."];
-//        [self showErrorAndExit];
-//    }
-//}
+
 
 - (void)showErrorAndExit {
     NSAlert *alert = [[NSAlert alloc] init];
@@ -799,6 +861,15 @@
     
     [NSApp terminate:nil];
 }
+
+
+// 传入文件路径，返回文件大小（字节数，NSString 类型）
+- (NSString *)fileSizeForPath:(NSString *)filePath {
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
+    unsigned long long fileSize = [attrs fileSize]; // 字节数
+    return [NSString stringWithFormat:@"%llu", fileSize];
+}
+
 
 
 @end
