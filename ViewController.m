@@ -38,6 +38,13 @@
     [self setupUI];
     [self setupDir];
 //    [self checkAndHandleBinaryDelta];
+    
+    // 初始化字典
+    self.jsonFieldMap = [NSMutableDictionary dictionary];
+
+    // 加载 JSON 文件
+    [self loadJSONFromFile:@"sample.json"];
+    
 }
 
 #pragma mark - setupUI
@@ -102,8 +109,110 @@
 //    [self.view addSubview:logScrollView];
 
     [self logMessage:@"Begin logging"];
+    
+    
+    // 假设 self.currentJSON 已经加载了 NSDictionary
+//    NSDictionary *jsonDict = self.currentJSON; // 或者通过 loadJSONFromFile:@"sample.json" 读取
+    // 加载 JSON
+    NSString *jsonPath = [[NSBundle mainBundle] pathForResource:@"sample" ofType:@"json"];
+    NSData *jsonData = [NSData dataWithContentsOfFile:jsonPath];
+    NSError *error;
+    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
+    if (!jsonDict) {
+        NSLog(@"Failed to load JSON: %@", error);
+        return;
+    }
+
+    self.currentJSON = [jsonDict mutableCopy];
+    self.jsonFieldMap = [NSMutableDictionary dictionary];
+
+    
+    // JSON 编辑区域
+    CGFloat jsonStartX = startX + labelWidth + fieldWidth + 150;
+    CGFloat jsonStartY = startY+20;
+    CGFloat jsonWidth = 500;
+    CGFloat jsonHeight = 650;
+
+    self.jsonScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight, jsonWidth, jsonHeight)];
+    self.jsonScrollView.hasVerticalScroller = YES;
+    self.jsonScrollView.autohidesScrollers = YES;
+    [self.view addSubview:self.jsonScrollView];
+
+    // Container
+    NSView *jsonContainer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, jsonWidth, jsonHeight)];
+    self.jsonScrollView.documentView = jsonContainer;
+
+    // 控件尺寸
+    CGFloat padding = 10;
+    CGFloat labelWidthJSON = 120;
+    CGFloat fieldWidthJSON = jsonWidth - labelWidthJSON - padding*2;
+    CGFloat fieldHeight = 24;
+    verticalSpacing = 40;
+
+    // 坐标从顶部向下
+    __block CGFloat currentY = jsonHeight - fieldHeight - padding;
+
+    [self.currentJSON enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
+        NSTextField *keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, currentY, labelWidthJSON, fieldHeight)];
+        keyLabel.stringValue = key;
+        keyLabel.bezeled = NO;
+        keyLabel.drawsBackground = NO;
+        keyLabel.editable = NO;
+        keyLabel.selectable = NO;
+        [jsonContainer addSubview:keyLabel];
+        
+        NSTextField *valueField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidthJSON, currentY, fieldWidthJSON, fieldHeight)];
+        valueField.stringValue = [NSString stringWithFormat:@"%@", obj];
+        [jsonContainer addSubview:valueField];
+        
+        self.jsonFieldMap[key] = valueField;
+        
+        currentY -= verticalSpacing;
+    }];
+
+    // Save 按钮
+    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, currentY - 40, 80, 30)];
+    [saveButton setTitle:@"Save"];
+    [saveButton setTarget:self];
+    [saveButton setAction:@selector(saveJSONToFile)];
+    [jsonContainer addSubview:saveButton];
+
+
 }
 
+#pragma mark 加载 JSON
+- (void)loadJSONFromFile:(NSString *)fileName {
+    NSString *filePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:fileName];
+    NSData *data = [NSData dataWithContentsOfFile:filePath];
+    if (!data) {
+        NSLog(@"❌ Cannot load file: %@", filePath);
+        return;
+    }
+    
+    NSError *error;
+    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&error];
+    if (error) {
+        NSLog(@"❌ JSON parse error: %@", error);
+        return;
+    }
+    self.currentJSON = jsonDict;
+}
+
+
+#pragma mark 保存修改json
+- (void)saveJSONToFile {
+    NSMutableDictionary *updatedJSON = [NSMutableDictionary dictionary];
+    
+    [self.jsonFieldMap enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSTextField *field, BOOL *stop) {
+        updatedJSON[key] = field.stringValue;
+    }];
+    
+    NSData *data = [NSJSONSerialization dataWithJSONObject:updatedJSON options:NSJSONWritingPrettyPrinted error:nil];
+    NSString *filePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"sample.json"];
+    [data writeToFile:filePath atomically:YES];
+    
+    NSLog(@"✅ JSON saved to %@", filePath);
+}
 
 
 #pragma mark - setupDir
@@ -119,6 +228,7 @@
     [FileHelper prepareEmptyFileAtPath:_jsonPath];
      
     [self logAllImportantPaths];
+    
 }
 
 - (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
