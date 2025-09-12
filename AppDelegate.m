@@ -18,29 +18,50 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    // 创建主窗口
-    NSRect frame = NSMakeRect(0, 0, 700, 500);
-    NSUInteger style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable;
+    self.window = [self createCenteredWindowWithWidthRatio:0.80
+                                               heightRatio:0.9
+                                               title:@"Sparkle Delta Generator V1.0"];
 
-    self.window = [[NSWindow alloc] initWithContentRect:frame
-                                              styleMask:style
-                                                backing:NSBackingStoreBuffered
-                                                  defer:NO];
-    [self.window center];
-    [self.window setTitle:@"Sparkle Delta Generator V1.0"];
-
-    // 创建主视图控制器
     self.viewController = [[ViewController alloc] init];
-
-    // 把 viewController 的视图设为窗口内容视图
     [self.window setContentView:self.viewController.view];
-
     [self.window makeKeyAndOrderFront:nil];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
     return YES;
 }
+
+
+- (NSWindow *)createCenteredWindowWithWidthRatio:(CGFloat)widthRatio
+                                    heightRatio:(CGFloat)heightRatio
+                                           title:(NSString *)title {
+    // 获取主屏幕
+    NSScreen *mainScreen = [NSScreen mainScreen];
+    NSRect screenFrame = [mainScreen visibleFrame];
+
+    // 按比例计算大小
+    CGFloat windowWidth  = screenFrame.size.width * widthRatio;
+    CGFloat windowHeight = screenFrame.size.height * heightRatio;
+
+    // 居中计算
+    CGFloat windowX = NSMidX(screenFrame) - windowWidth / 2.0;
+    CGFloat windowY = NSMidY(screenFrame) - windowHeight / 2.0;
+    NSRect frame = NSMakeRect(windowX, windowY, windowWidth, windowHeight);
+
+    // 样式
+    NSUInteger style = NSWindowStyleMaskTitled |
+                       NSWindowStyleMaskClosable |
+                       NSWindowStyleMaskResizable;
+
+    // 初始化窗口
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
+                                                  styleMask:style
+                                                    backing:NSBackingStoreBuffered
+                                                      defer:NO];
+    [window setTitle:title];
+    return window;
+}
+
 
 @end
 

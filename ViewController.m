@@ -18,7 +18,19 @@
 
 - (void)loadView {
     // 创建根视图
-    self.view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 700, 500)];
+    [self setupRootViewWithWidthRatio:0.8 heightRatio:0.9];
+}
+
+
+// 创建一个动态大小的根视图，宽高为屏幕比例
+- (void)setupRootViewWithWidthRatio:(CGFloat)widthRatio heightRatio:(CGFloat)heightRatio {
+    NSScreen *screen = [NSScreen mainScreen];
+    NSRect screenFrame = [screen visibleFrame];
+
+    CGFloat width = screenFrame.size.width * widthRatio;
+    CGFloat height = screenFrame.size.height * heightRatio;
+
+    self.view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height)];
 }
 
 - (void)viewDidLoad {
@@ -30,29 +42,65 @@
 
 #pragma mark - setupUI
 - (void)setupUI {
-    CGFloat baseY = 440;
-    CGFloat spacingY = 50;
+    // 起始位置
+    CGFloat startX = 10;
+    CGFloat startY = 660;  // 顶部向下起始
+    CGFloat verticalSpacing = 40;
 
+    // 各控件宽度
+    CGFloat labelWidth = 100;
+    CGFloat fieldWidth = 360;
+    CGFloat buttonWidth = 80;
+
+    // --- Old App ---
     NSDictionary *oldAppControls = [self setupAppSelectorWithLabel:@"Old App"
-                                                            action:@selector(selectOldApp)
-                                                         yPosition:baseY];
+                                                             action:@selector(selectOldApp)
+                                                               x:startX
+                                                               y:startY
+                                                        labelWidth:labelWidth
+                                                        fieldWidth:fieldWidth
+                                                       buttonWidth:buttonWidth];
     self.oldAppLabel = oldAppControls[@"label"];
     self.oldAppPathField = oldAppControls[@"field"];
     self.oldAppSelectButton = oldAppControls[@"button"];
 
+    // --- New App ---
     NSDictionary *newAppControls = [self setupAppSelectorWithLabel:@"New App"
-                                                            action:@selector(selectUpdatedApp)
-                                                         yPosition:baseY - spacingY];
+                                                             action:@selector(selectUpdatedApp)
+                                                               x:startX
+                                                               y:startY - verticalSpacing
+                                                        labelWidth:labelWidth
+                                                        fieldWidth:fieldWidth
+                                                       buttonWidth:buttonWidth];
     self.updatedAppLabel = newAppControls[@"label"];
     self.updatedAppPathField = newAppControls[@"field"];
     self.updatedAppSelectButton = newAppControls[@"button"];
-    
-    [self setupGenerateButtonAtY:baseY - spacingY * 2];
-    NSTextView *logTextView;
-    NSScrollView *logScrollView = [UIHelper createLogTextViewWithFrame:NSMakeRect(20, 20, 600, 300)
-                                                              textView:&logTextView];
-    self.logTextView = logTextView;
+
+    // --- Generate & Apply Buttons ---
+    [self setupGenerateButtonAtX:startX
+                               y:startY - verticalSpacing * 2
+                             width:160
+                           spacing:20];
+
+    CGFloat logHeight = 500;
+    CGFloat logWidth = 550;
+    CGFloat logY = startY - verticalSpacing * 2 - 50 - logHeight;
+
+    NSTextView *logTextView = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, logWidth, logHeight)];
+    logTextView.editable = NO;
+    logTextView.font = [NSFont systemFontOfSize:16];  // 字体大小，可调，比如 14 或 16
+
+    NSScrollView *logScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(startX, logY, logWidth, logHeight)];
+    logScrollView.documentView = logTextView;
+    logScrollView.hasVerticalScroller = YES;
+    logScrollView.hasHorizontalScroller = YES;
+    logScrollView.autohidesScrollers = YES;
+
     [self.view addSubview:logScrollView];
+    self.logTextView = logTextView;
+
+//    [self.view addSubview:logScrollView];
+
     [self logMessage:@"Begin logging"];
 }
 
@@ -73,28 +121,31 @@
     [self logAllImportantPaths];
 }
 
-
 - (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
                                      action:(SEL)selector
-                                  yPosition:(CGFloat)y {
-    CGFloat padding = 20;
-    CGFloat labelWidth = 100;
-    CGFloat fieldWidth = 400;
-    CGFloat buttonWidth = 130;
+                                       x:(CGFloat)x
+                                       y:(CGFloat)y
+                                  labelWidth:(CGFloat)labelWidth
+                                  fieldWidth:(CGFloat)fieldWidth
+                                 buttonWidth:(CGFloat)buttonWidth {
+    
     CGFloat height = 24;
 
+    // Label
     NSTextField *label = [UIHelper createLabelWithText:labelText
-                                                 frame:NSMakeRect(padding, y, labelWidth, height)];
+                                                 frame:NSMakeRect(x, y, labelWidth, height)];
     [self.view addSubview:label];
 
-    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
+    // Path Field
+    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(x + labelWidth, y, fieldWidth, height)];
     [self.view addSubview:field];
 
+    // Button
     NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
     NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
                                                 target:self
                                                 action:selector
-                                                 frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
+                                                 frame:NSMakeRect(x + labelWidth + fieldWidth + 10, y - 3, buttonWidth, 30)];
     [self.view addSubview:button];
 
     return @{
@@ -104,21 +155,68 @@
     };
 }
 
-
-- (void)setupGenerateButtonAtY:(CGFloat)y {
-    CGFloat padding = 20;
+- (void)setupGenerateButtonAtX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width spacing:(CGFloat)spacing {
+    // Generate Delta Button
     self.generateUpdateButton = [UIHelper createButtonWithTitle:@"generate delta"
                                                          target:self
                                                          action:@selector(generateUpdate)
-                                                          frame:NSMakeRect(padding, y, 160, 30)];
+                                                          frame:NSMakeRect(x, y, width, 30)];
     [self.view addSubview:self.generateUpdateButton];
-    
+
+    // Test Apply Delta Button
     self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
                                                       target:self
                                                       action:@selector(setUpApplyUpdateWindow)
-                                                       frame:NSMakeRect(padding*12, y, 160, 30)];
+                                                       frame:NSMakeRect(x + width + spacing, y, width, 30)];
     [self.view addSubview:self.applyUpdateButton];
 }
+
+
+//- (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
+//                                     action:(SEL)selector
+//                                  yPosition:(CGFloat)y {
+//    CGFloat padding = 20;
+//    CGFloat labelWidth = 100;
+//    CGFloat fieldWidth = 400;
+//    CGFloat buttonWidth = 130;
+//    CGFloat height = 24;
+//
+//    NSTextField *label = [UIHelper createLabelWithText:labelText
+//                                                 frame:NSMakeRect(padding, y, labelWidth, height)];
+//    [self.view addSubview:label];
+//
+//    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
+//    [self.view addSubview:field];
+//
+//    NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
+//    NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
+//                                                target:self
+//                                                action:selector
+//                                                 frame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
+//    [self.view addSubview:button];
+//
+//    return @{
+//        @"label": label,
+//        @"field": field,
+//        @"button": button
+//    };
+//}
+//
+//
+//- (void)setupGenerateButtonAtY:(CGFloat)y {
+//    CGFloat padding = 20;
+//    self.generateUpdateButton = [UIHelper createButtonWithTitle:@"generate delta"
+//                                                         target:self
+//                                                         action:@selector(generateUpdate)
+//                                                          frame:NSMakeRect(padding, y, 160, 30)];
+//    [self.view addSubview:self.generateUpdateButton];
+//    
+//    self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
+//                                                      target:self
+//                                                      action:@selector(setUpApplyUpdateWindow)
+//                                                       frame:NSMakeRect(padding*12, y, 160, 30)];
+//    [self.view addSubview:self.applyUpdateButton];
+//}
 #pragma mark - Button Actions
 - (void)selectOldApp {
     
