@@ -25,8 +25,10 @@
 @property (nonatomic, strong) NSTextView *jsonTextView; // <-- 新增这一行
 
 // JSON 编辑相关
-@property (strong) NSDictionary *currentJSON;
-@property (strong) NSMutableDictionary<NSString *, NSTextField *> *jsonFieldMap;
+@property (nonatomic, strong) NSDictionary *currentJSON;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSTextField *> *jsonFieldMap;
+
+
 
 // 在这里加上 jsonScrollView
 @property (strong) NSScrollView *jsonScrollView;

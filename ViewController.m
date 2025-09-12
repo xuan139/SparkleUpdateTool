@@ -41,9 +41,10 @@
     
     // 初始化字典
     self.jsonFieldMap = [NSMutableDictionary dictionary];
+    
 
     // 加载 JSON 文件
-    [self loadJSONFromFile:@"sample.json"];
+//    [self loadJSONFromSparkleOutput:@"sample.json"];
     
 }
 
@@ -106,32 +107,14 @@
     [self.view addSubview:logScrollView];
     self.logTextView = logTextView;
 
-//    [self.view addSubview:logScrollView];
-
     [self logMessage:@"Begin logging"];
-    
-    
-    // 假设 self.currentJSON 已经加载了 NSDictionary
-//    NSDictionary *jsonDict = self.currentJSON; // 或者通过 loadJSONFromFile:@"sample.json" 读取
-    // 加载 JSON
-    NSString *jsonPath = [[NSBundle mainBundle] pathForResource:@"sample" ofType:@"json"];
-    NSData *jsonData = [NSData dataWithContentsOfFile:jsonPath];
-    NSError *error;
-    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
-    if (!jsonDict) {
-        NSLog(@"Failed to load JSON: %@", error);
-        return;
-    }
-
-    self.currentJSON = [jsonDict mutableCopy];
-    self.jsonFieldMap = [NSMutableDictionary dictionary];
 
     
     // JSON 编辑区域
     CGFloat jsonStartX = startX + labelWidth + fieldWidth + 150;
     CGFloat jsonStartY = startY+20;
     CGFloat jsonWidth = 500;
-    CGFloat jsonHeight = 650;
+    CGFloat jsonHeight = 600;
 
     self.jsonScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight, jsonWidth, jsonHeight)];
     self.jsonScrollView.hasVerticalScroller = YES;
@@ -170,49 +153,210 @@
         currentY -= verticalSpacing;
     }];
 
-    // Save 按钮
-    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, currentY - 40, 80, 30)];
+    // --- Save Button（固定在 ScrollView 下方） ---
+    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight - 40, 80, 30)];
     [saveButton setTitle:@"Save"];
     [saveButton setTarget:self];
     [saveButton setAction:@selector(saveJSONToFile)];
-    [jsonContainer addSubview:saveButton];
+    [self.view addSubview:saveButton];
+
+    // --- Load Button（Save 右边 10px） ---
+    NSButton *loadButton = [[NSButton alloc] initWithFrame:NSMakeRect(jsonStartX + 90, jsonStartY - jsonHeight - 40, 80, 30)];
+    [loadButton setTitle:@"Load"];
+    [loadButton setTarget:self];
+    [loadButton setAction:@selector(loadJSONFromFile)];
+    [self.view addSubview:loadButton];
 
 
 }
 
-#pragma mark 加载 JSON
-- (void)loadJSONFromFile:(NSString *)fileName {
-    NSString *filePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:fileName];
-    NSData *data = [NSData dataWithContentsOfFile:filePath];
-    if (!data) {
-        NSLog(@"❌ Cannot load file: %@", filePath);
-        return;
-    }
-    
-    NSError *error;
+
+#pragma mark - 加载 JSON
+
+// 核心方法：解析 NSData 并生成 UI
+- (void)loadJSONFromData:(NSData *)data {
+    if (!data) { NSLog(@"❌ JSON 数据为空"); return; }
+
+    NSError *error = nil;
     NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&error];
-    if (error) {
-        NSLog(@"❌ JSON parse error: %@", error);
+    if (error || ![jsonDict isKindOfClass:[NSDictionary class]]) {
+        NSLog(@"❌ JSON 解析失败: %@", error);
         return;
     }
-    self.currentJSON = jsonDict;
+
+    NSLog(@"✅ 读取 JSON 成功: %@", jsonDict);
+
+    // 清理旧 UI
+    for (NSView *subview in self.jsonScrollView.documentView.subviews) {
+        [subview removeFromSuperview];
+    }
+    [self.jsonFieldMap removeAllObjects];
+
+    // 生成 UI（保持原有嵌套解析逻辑）
+    CGFloat padding = 10;
+    CGFloat labelWidth = 150;
+    CGFloat fieldWidth = 220;
+    CGFloat rowHeight = 30;
+    CGFloat currentY = self.jsonScrollView.contentSize.height - rowHeight - padding;
+
+    [self createFieldsForJSON:jsonDict inContainer:self.jsonScrollView.documentView atY:&currentY withPrefix:@"" indent:0];
+
+//    // Save 按钮
+//    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, currentY - 40, 80, 30)];
+//    [saveButton setTitle:@"Save"];
+//    [saveButton setTarget:self];
+//    [saveButton setAction:@selector(saveJSONToFile)];
+//    [self.jsonScrollView.documentView addSubview:saveButton];
+}
+
+// 弹出选择文件
+- (void)loadJSONFromFile {
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
+
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = NO;
+    panel.allowedFileTypes = @[@"json"];
+    panel.directoryURL = [NSURL fileURLWithPath:outputDir];
+
+    if ([panel runModal] == NSModalResponseOK) {
+        NSURL *selectedFileURL = panel.URLs.firstObject;
+        if (!selectedFileURL) return;
+
+        NSData *data = [NSData dataWithContentsOfFile:selectedFileURL.path];
+        [self loadJSONFromData:data];
+    }
+}
+
+// 直接用路径加载
+- (void)loadJSONFromFileAtPath:(NSString *)filePath {
+    NSData *data = [NSData dataWithContentsOfFile:filePath];
+    [self loadJSONFromData:data];
 }
 
 
-#pragma mark 保存修改json
+// 递归生成 UI
+- (void)createFieldsForJSON:(NSDictionary *)json
+                 inContainer:(NSView *)container
+                        atY:(CGFloat *)currentY
+                   withPrefix:(NSString *)prefix
+                       indent:(CGFloat)indent {
+
+    CGFloat padding = 10;
+    CGFloat labelWidth = 150;
+    CGFloat fieldWidth = 220;
+    CGFloat rowHeight = 30;
+    CGFloat verticalSpacing = 8;
+
+    [json enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
+        NSString *fullKey = prefix.length ? [NSString stringWithFormat:@"%@.%@", prefix, key] : key;
+
+        NSTextField *keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + indent, *currentY, labelWidth, rowHeight)];
+        keyLabel.stringValue = key;
+        keyLabel.editable = NO;
+        keyLabel.bezeled = NO;
+        keyLabel.drawsBackground = NO;
+        keyLabel.toolTip = fullKey;  // ✅ 设置 key tooltip
+        [container addSubview:keyLabel];
+
+        if ([obj isKindOfClass:[NSDictionary class]]) {
+            *currentY -= (rowHeight + verticalSpacing);
+            [self createFieldsForJSON:obj inContainer:container atY:currentY withPrefix:fullKey indent:indent + 20];
+        } else {
+            NSTextField *valueField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth + 10 + indent, *currentY, fieldWidth, rowHeight)];
+            valueField.stringValue = [NSString stringWithFormat:@"%@", obj];
+            valueField.toolTip = [NSString stringWithFormat:@"%@: %@", fullKey, obj]; // ✅ 设置 value tooltip
+            [container addSubview:valueField];
+            self.jsonFieldMap[fullKey] = valueField;
+            *currentY -= (rowHeight + verticalSpacing);
+        }
+    }];
+}
+
+
+#pragma mark - 保存 JSON
 - (void)saveJSONToFile {
-    NSMutableDictionary *updatedJSON = [NSMutableDictionary dictionary];
+    // 1️⃣ 弹出输入框，默认文件名为 appName
+    [self.view.window makeFirstResponder:nil];
+    NSString *defaultFileName = self.jsonFieldMap[@"appName"].stringValue ?: @"update";
     
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"请输入保存的 JSON 文件名"];
+    [alert addButtonWithTitle:@"Save"];
+    [alert addButtonWithTitle:@"Cancel"];
+    
+    NSTextField *inputField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
+    inputField.stringValue = defaultFileName;
+    [alert setAccessoryView:inputField];
+    
+    NSModalResponse response = [alert runModal];
+    if (response != NSAlertFirstButtonReturn) {
+        return; // 用户取消
+    }
+    
+    NSString *fileName = inputField.stringValue;
+    if (fileName.length == 0) fileName = @"update";
+    
+    // 2️⃣ 原来的保存逻辑
+    NSMutableDictionary *flatJSON = [NSMutableDictionary dictionary];
     [self.jsonFieldMap enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSTextField *field, BOOL *stop) {
-        updatedJSON[key] = field.stringValue;
+        flatJSON[key] = field.stringValue ?: @"";
     }];
     
-    NSData *data = [NSJSONSerialization dataWithJSONObject:updatedJSON options:NSJSONWritingPrettyPrinted error:nil];
-    NSString *filePath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"sample.json"];
-    [data writeToFile:filePath atomically:YES];
+    NSDictionary *nestedJSON = [self reconstructNestedDictionaryFromFlat:flatJSON];
     
-    NSLog(@"✅ JSON saved to %@", filePath);
+    NSError *error;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:nestedJSON options:NSJSONWritingPrettyPrinted error:&error];
+    if (error) {
+        NSLog(@"❌ JSON 序列化失败: %@", error);
+        return;
+    }
+    
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:outputDir withIntermediateDirectories:YES attributes:nil error:nil];
+    
+    NSString *filePath = [outputDir stringByAppendingPathComponent:[fileName stringByAppendingPathExtension:@"json"]];
+    BOOL success = [data writeToFile:filePath atomically:YES];
+    
+    if (success) {
+        NSLog(@"✅ JSON 已保存到 %@", filePath);
+        // 弹出成功提示
+        NSAlert *successAlert = [[NSAlert alloc] init];
+        successAlert.messageText = @"✅ 保存成功";
+        successAlert.informativeText = [NSString stringWithFormat:@"JSON 文件已保存到 %@", filePath];
+        [successAlert addButtonWithTitle:@"OK"];
+        [successAlert runModal];
+        
+        // 刷新 UI，加载刚保存的 JSON
+        [self loadJSONFromFileAtPath:filePath];
+        
+    } else {
+        NSLog(@"❌ JSON 写入失败");
+    }
 }
+
+// 将 flat JSON（key 可能是 parent.child）还原成嵌套字典
+- (NSDictionary *)reconstructNestedDictionaryFromFlat:(NSDictionary *)flatDict {
+    NSMutableDictionary *nested = [NSMutableDictionary dictionary];
+    for (NSString *flatKey in flatDict) {
+        NSArray *components = [flatKey componentsSeparatedByString:@"."];
+        NSMutableDictionary *current = nested;
+        for (NSInteger i = 0; i < components.count; i++) {
+            NSString *part = components[i];
+            if (i == components.count - 1) {
+                current[part] = flatDict[flatKey];
+            } else {
+                if (!current[part]) current[part] = [NSMutableDictionary dictionary];
+                current = current[part];
+            }
+        }
+    }
+    return nested;
+}
+
 
 
 #pragma mark - setupDir

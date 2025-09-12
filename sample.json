@@ -13,7 +13,7 @@
   
   "description": "Steam client update: Improve game download speed, fix macOS compatibility issues, optimize memory usage.",
   
-  "minimumSystemVersion": "10.11",
+  "minimumSystemVersion": "10.19",
   
   "signature": "base64_encoded_signature",
   
