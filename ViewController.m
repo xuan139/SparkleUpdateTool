@@ -566,51 +566,47 @@
         NSString *deltaFilePath = [outputDir stringByAppendingPathComponent:deltaFileName];
         NSString *appFilePath = [outputDir stringByAppendingPathComponent:
                                  [NSString stringWithFormat:@"%@-%@.app", _appName, latestVersion]];
-
-        // 先压缩，得到 zip 路径
-        NSString *zipFilePath = [FileHelper zipAppAtPath:appFilePath
-                                             logBlock:^(NSString *message) {
-            NSLog(@"%@", message);
-
-        }];
-
-        // 再计算压缩后的 zip 大小
-        unsigned long long sizeInBytes = [FileHelper fileSizeAtPath:zipFilePath];
-        NSString *fileSize = [NSString stringWithFormat:@"%llu", sizeInBytes];
-
-        NSLog(@"zip 文件路径: %@", zipFilePath);
-        NSLog(@"zip 文件大小: %@", fileSize);
-
-
+        
         // 计算大小（字节）
         NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
 
-        NSString *wineVersion = @"10.9";
+        NSString *wineVersion = @"10.0";
         NSArray<NSString *> *preservePaths = @[@"steamapps", @"userdata", @"config"];
 
-        BOOL success = [self generateFullVersionJSONWithAppName:appName
-                                                  lastVersion:lastVersion
-                                                 latestVersion:latestVersion
-                                                 deltaFileName:deltaFileName
-                                                     deltaSize:deltaSize
-                                                      fileSize:fileSize
-                                                       deltaURL:deltaURL
-                                                   downloadURL:downloadURL
-                                                    wineVersion:wineVersion
-                                                  preservePaths:preservePaths
-                                                        jsonPath:jsonPath];
+        __block NSString *zipfileSize = nil;
+        
+        // 先压缩，得到 zip 路径
+        [FileHelper zipAppAtPath:appFilePath logBlock:^(NSString *message) {
+            NSLog(@"%@", message);
+        } completion:^(NSString *zipFilePath) {
+            unsigned long long sizeInBytes = [FileHelper fileSizeAtPath:zipFilePath];
+            zipfileSize = [NSString stringWithFormat:@"%llu", sizeInBytes];
+            NSLog(@"zip 文件路径: %@", zipFilePath);
+            NSLog(@"zip in Block 文件大小: %@", zipfileSize);
+            BOOL success = [self generateFullVersionJSONWithAppName:appName
+                                                      lastVersion:lastVersion
+                                                     latestVersion:latestVersion
+                                                     deltaFileName:deltaFileName
+                                                         deltaSize:deltaSize
+                                                        zipfileSize:zipfileSize
+                                                           deltaURL:deltaURL
+                                                       downloadURL:downloadURL
+                                                        wineVersion:wineVersion
+                                                      preservePaths:preservePaths
+                                                            jsonPath:jsonPath];
 
-        if (success) {
-            NSLog(@"✅ JSON 文件生成成功: %@", jsonPath);
-        } else {
-            NSLog(@"❌ JSON 文件生成失败");
-        }
+            if (success) {
+                [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
+                                             message:[NSString stringWithFormat:@"success create json file copy to %@", jsonPath]];
+                [self logMessage:@"✅ success create json file"];
 
-        if (success) {
-            NSLog(@"✅ Version JSON generated successfully!");
-        } else {
-            NSLog(@"❌ Failed to generate Version JSON.");
-        }
+                
+            } else {
+                [UIHelper showSuccessAlertWithTitle:@"❌ failed!"
+                                            message:@"failed to create json file"];
+                [self logMessage:@"❌ failed to create json file"];
+            }
+        }];
 
     } else {
         [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
@@ -649,7 +645,7 @@
                                latestVersion:(NSString *)latestVersion
                                deltaFileName:(NSString *)deltaFileName
                                    deltaSize:(NSString *)deltaSize
-                                    fileSize:(NSString *)fileSize
+                                    zipfileSize:(NSString *)zipfileSize
                                      deltaURL:(NSString *)deltaURL
                                      downloadURL:(NSString *)downloadURL
                                      wineVersion:(NSString *)wineVersion
@@ -661,7 +657,7 @@
     if (!latestVersion) latestVersion = @"0.0.0";
     if (!deltaFileName) deltaFileName = @"";
     if (!deltaSize) deltaSize = @"0";
-    if (!fileSize) fileSize = @"0";
+    if (!zipfileSize) zipfileSize = @"0";
     if (!deltaURL) deltaURL = @"";
     if (!downloadURL) downloadURL = @"";
     if (!wineVersion) wineVersion = @"";
@@ -689,7 +685,7 @@
         @"latestVersion": latestVersion,
         @"deltaFileName": deltaFileName,
         @"deltaSize": deltaSize,
-        @"fileSize": fileSize,
+        @"fileSize": zipfileSize,
         @"deltaURL": deltaURL,
         @"downloadURL": downloadURL,
         @"releaseDate": releaseDate,

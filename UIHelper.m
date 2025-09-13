@@ -55,12 +55,23 @@
     return scrollView;
 }
 
+//+ (void)showSuccessAlertWithTitle:(NSString *)title message:(NSString *)message {
+//    NSAlert *alert = [[NSAlert alloc] init];
+//    alert.messageText = title ?: @"✅ Success";
+//    alert.informativeText = message ?: @"Operation completed successfully.";
+//    [alert addButtonWithTitle:@"OK"];
+//    [alert runModal];
+//}
+
+
 + (void)showSuccessAlertWithTitle:(NSString *)title message:(NSString *)message {
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = title ?: @"✅ Success";
-    alert.informativeText = message ?: @"Operation completed successfully.";
-    [alert addButtonWithTitle:@"OK"];
-    [alert runModal];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = title.length > 0 ? title : @"✅ Success";
+        alert.informativeText = message.length > 0 ? message : @"Operation completed successfully.";
+        [alert addButtonWithTitle:@"OK"];
+        [alert runModal];
+    });
 }
 
 @end

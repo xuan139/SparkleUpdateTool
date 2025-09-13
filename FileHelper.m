@@ -278,6 +278,30 @@
     return YES;
 }
 
+
++ (void)zipAppAtPath:(NSString *)appPath
+           logBlock:(void (^)(NSString *message))logBlock
+       completion:(void (^)(NSString *zipFilePath))completion
+{
+    NSString *outputDir = [appPath stringByDeletingLastPathComponent];
+    NSString *zipFilePath = [outputDir stringByAppendingPathComponent:
+                             [NSString stringWithFormat:@"%@.zip", [appPath lastPathComponent]]];
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        // 压缩逻辑
+        NSTask *zipTask = [[NSTask alloc] init];
+        zipTask.launchPath = @"/usr/bin/zip";
+        zipTask.arguments = @[@"-r", zipFilePath, appPath.lastPathComponent];
+        zipTask.currentDirectoryPath = outputDir;
+        [zipTask launch];
+        [zipTask waitUntilExit];
+
+        if (logBlock) logBlock([NSString stringWithFormat:@"📦 压缩完成: %@", zipFilePath]);
+        if (completion) completion(zipFilePath);
+    });
+}
+
+
 + (NSString *)zipAppAtPath:(NSString *)appPath logBlock:(void (^)(NSString *message))logBlock {
     if (![[NSFileManager defaultManager] fileExistsAtPath:appPath]) {
         logBlock(@"❌ 要压缩的 .app 文件不存在");

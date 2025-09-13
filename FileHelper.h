@@ -16,6 +16,10 @@
                                    logBlock:(void (^)(NSString *msg))logBlock;
 
 + (unsigned long long)fileSizeAtPath:(NSString *)filePath;
++ (void)zipAppAtPath:(NSString *)appPath
+           logBlock:(void (^)(NSString *message))logBlock
+          completion:(void (^)(NSString *zipFilePath))completion;
+
 + (NSString *)strfileSizeAtPath:(NSString *)filePath;
 + (NSString *)firstAppFileNameInPath:(NSString *)directoryPath;
 + (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir;
