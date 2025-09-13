@@ -18,7 +18,7 @@
 
 - (void)loadView {
     // 创建根视图
-    [self setupRootViewWithWidthRatio:0.8 heightRatio:0.9];
+    [self setupRootViewWithWidthRatio:0.9 heightRatio:0.9];
 }
 
 
@@ -37,14 +37,8 @@
     [super viewDidLoad];
     [self setupUI];
     [self setupDir];
-//    [self checkAndHandleBinaryDelta];
-    
     // 初始化字典
     self.jsonFieldMap = [NSMutableDictionary dictionary];
-    
-
-    // 加载 JSON 文件
-//    [self loadJSONFromSparkleOutput:@"sample.json"];
     
 }
 
@@ -52,7 +46,7 @@
 - (void)setupUI {
     // 起始位置
     CGFloat startX = 10;
-    CGFloat startY = 660;  // 顶部向下起始
+    CGFloat startY = 660;  // 顶部向下起始 这是Y在左下角开始的原因
     CGFloat verticalSpacing = 40;
 
     // 各控件宽度
@@ -171,12 +165,10 @@
     [loadButton setAction:@selector(loadJSONFromFile)];
     [self.view addSubview:loadButton];
 
-
 }
 
 
 #pragma mark - 加载 JSON
-
 // 核心方法：解析 NSData 并生成 UI
 - (void)loadJSONFromData:(NSData *)data {
     if (!data) { NSLog(@"❌ JSON 数据为空"); return; }
@@ -205,12 +197,6 @@
 
     [self createFieldsForJSON:jsonDict inContainer:self.jsonScrollView.documentView atY:&currentY withPrefix:@"" indent:0];
 
-//    // Save 按钮
-//    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, currentY - 40, 80, 30)];
-//    [saveButton setTitle:@"Save"];
-//    [saveButton setTarget:self];
-//    [saveButton setAction:@selector(saveJSONToFile)];
-//    [self.jsonScrollView.documentView addSubview:saveButton];
 }
 
 // 弹出选择文件
@@ -248,11 +234,11 @@
                    withPrefix:(NSString *)prefix
                        indent:(CGFloat)indent {
 
-    CGFloat padding = 5;
-    CGFloat labelWidth = 150;
-    CGFloat fieldWidth = 280;
+    CGFloat padding = 10;
+    CGFloat labelWidth = 120;
+    CGFloat fieldWidth = 320;
     CGFloat rowHeight = 20;
-    CGFloat verticalSpacing = 8;
+    CGFloat verticalSpacing = 10;
 
     [json enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
         NSString *fullKey = prefix.length ? [NSString stringWithFormat:@"%@.%@", prefix, key] : key;
@@ -264,6 +250,8 @@
         keyLabel.drawsBackground = NO;
         keyLabel.toolTip = fullKey;  // ✅ 设置 key tooltip
         [container addSubview:keyLabel];
+        
+
 
         if ([obj isKindOfClass:[NSDictionary class]]) {
             *currentY -= (rowHeight + verticalSpacing);
@@ -540,11 +528,11 @@
     if (success) {
         [self logMessage:@"✅ success create delta.update copy to _outputDir"];
         
-        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir];
-        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir];
-        [FileHelper copyFileAtPath:_deltaPath toDirectory:_outputDir];
+        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir]; //copy old app
+        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir]; //copy new app
+        [FileHelper copyFileAtPath:_deltaPath toDirectory:_outputDir]; //copy delta app
         [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
-                                    message:@"success create delta.update copy to _outputDir."];
+                                     message:[NSString stringWithFormat:@"success create delta.update copy to %@", _deltaPath]];
 
         NSString *baseURL = @"https://unigo.ai/uploads/";
         NSString *appName = _appName;
@@ -570,9 +558,12 @@
         // 计算大小（字节）
         NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
 
+        //dafault not used on Ostation
+        
         NSString *wineVersion = @"10.0";
         NSArray<NSString *> *preservePaths = @[@"steamapps", @"userdata", @"config"];
 
+        
         __block NSString *zipfileSize = nil;
         
         // 先压缩，得到 zip 路径
@@ -583,6 +574,7 @@
             zipfileSize = [NSString stringWithFormat:@"%llu", sizeInBytes];
             NSLog(@"zip 文件路径: %@", zipFilePath);
             NSLog(@"zip in Block 文件大小: %@", zipfileSize);
+            // zip 完成后才开始产生json game zip 会比较久，建议制作等待icon
             BOOL success = [self generateFullVersionJSONWithAppName:appName
                                                       lastVersion:lastVersion
                                                      latestVersion:latestVersion
@@ -596,10 +588,11 @@
                                                             jsonPath:jsonPath];
 
             if (success) {
+                [self logMessage:@"✅ success create json file"];
                 [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
                                              message:[NSString stringWithFormat:@"success create json file copy to %@", jsonPath]];
-                [self logMessage:@"✅ success create json file"];
-
+                // 弹窗关闭后再加载 JSON
+                [self loadJSONFromFileAtPath:jsonPath]; //refesh json on UI
                 
             } else {
                 [UIHelper showSuccessAlertWithTitle:@"❌ failed!"
@@ -714,52 +707,6 @@
     return YES;
 }
 
-
-
-- (BOOL)generateVersionJSONWithAppName:(NSString *)appName
-                           lastVersion:(NSString *)lastVersion
-                         latestVersion:(NSString *)latestVersion
-                         deltaFileName:(NSString *)deltaFileName
-                              jsonPath:(NSString *)jsonPath{
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-    NSString *releaseDate = [formatter stringFromDate:[NSDate date]];
-
-    NSDictionary *jsonDict = @{
-        @"appName": appName ?: @"UnknownApp",
-        @"lastVersion": lastVersion ?: @"0.0.0",
-        @"latestVersion": latestVersion ?: @"0.0.0",
-        @"releaseDate": releaseDate,
-        @"deltaFileName": deltaFileName ?: @"",
-        @"jsonPath": jsonPath ?: @""
-    };
-
-    NSError *error;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonDict
-                                                       options:NSJSONWritingPrettyPrinted
-                                                         error:&error];
-    if (error) {
-        NSLog(@"❌ Failed to serialize JSON: %@", error.localizedDescription);
-        return NO;
-    }
-    
-//    NSLog(@"JSON dict: %@", jsonDict);
-//    NSLog(@"outputPath: %@", jsonPath);
-//    NSLog(@"jsonData length: %lu", (unsigned long)jsonData.length);
-
-    BOOL success = [jsonData writeToFile:jsonPath atomically:YES];
-    if (!success) {
-        NSLog(@"❌ Failed to write JSON to path: %@", jsonPath);
-        [self logMessage:[NSString stringWithFormat:@"❌ Failed to write JSON to path: %@", jsonPath]];
-        
-        return NO;
-    }
-
-    NSLog(@"✅ JSON saved to: %@", jsonPath);
-    [self logMessage:[NSString stringWithFormat:@"✅ JSON saved to: %@", jsonPath]];
-    return YES;
-}
-
 //  a user interaction function . Its purpose is to display a prompt dialog that allows the user to input a delta file name and returns the full file path.
 
 - (NSString *)promptForDeltaFilePathWithBaseDir:(NSString *)baseDir
@@ -845,8 +792,6 @@
         }
     });
 }
-
-
 
 - (void)showErrorAndExit {
     NSAlert *alert = [[NSAlert alloc] init];
