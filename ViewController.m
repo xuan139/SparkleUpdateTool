@@ -34,6 +34,8 @@
 
 - (void)loadView {
     NSView *view = [[NSView alloc] init];
+    // [修改] 将宽度从 600 改为 900，高度改为 600，防止右侧内容被挤出去
+//    NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 900, 600)];
     self.view = view;
 }
 
@@ -44,23 +46,28 @@
 }
 
 - (void)setupLayout {
-    // --- 主容器 ---
+    // 1. 主容器 (Vertical StackView)
     NSStackView *mainStack = [[NSStackView alloc] init];
     mainStack.orientation = NSUserInterfaceLayoutOrientationVertical;
     mainStack.alignment = NSLayoutAttributeLeading;
-    mainStack.spacing = 16;
-    mainStack.edgeInsets = NSEdgeInsetsMake(20, 20, 20, 20);
+    mainStack.spacing = 20;
+    
+    // [修改 1] 移除这里的 edgeInsets，改用下方约束控制边距
+    // mainStack.edgeInsets = NSEdgeInsetsMake(30, 40, 30, 40);
+    
     mainStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:mainStack];
-    
+
+    // [修改 2] 在约束中添加边距 (Padding)
+    // 这样 mainStack 的实际宽度就是 (WindowWidth - 80)，子视图填满它也不会溢出
     [NSLayoutConstraint activateConstraints:@[
-        [mainStack.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [mainStack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [mainStack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [mainStack.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+        [mainStack.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:30],
+        [mainStack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:40],
+        [mainStack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-40], // 注意负号
+        [mainStack.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-30]      // 注意负号
     ]];
 
-    // --- 1. 顶部：文件选择区 ---
+    // --- 2. 顶部：文件选择区 ---
     NSTextField *tempOldPathField = nil;
     [mainStack addArrangedSubview:[self createSelectionRowWithLabel:@"Old App:" pathField:&tempOldPathField action:@selector(selectOldApp)]];
     self.oldAppPathField = tempOldPathField;
@@ -69,7 +76,7 @@
     [mainStack addArrangedSubview:[self createSelectionRowWithLabel:@"New App:" pathField:&tempNewPathField action:@selector(selectUpdatedApp)]];
     self.updatedAppPathField = tempNewPathField;
     
-    // --- 2. 顶部：操作按钮区 ---
+    // --- 3. 顶部：操作按钮区 ---
     NSStackView *actionRow = [[NSStackView alloc] init];
     actionRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     actionRow.spacing = 20;
@@ -80,12 +87,16 @@
     [actionRow addArrangedSubview:self.generateUpdateButton];
     [actionRow addArrangedSubview:self.applyUpdateButton];
     [actionRow addArrangedSubview:[NSView new]]; // Spacer
+    
     [mainStack addArrangedSubview:actionRow];
     
-    // --- 3. 底部：内容区 (日志 + JSON 编辑器) ---
+    // [关键] 让 actionRow 填满 mainStack 的宽度
+    [actionRow.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
+    
+    // --- 4. 底部：内容区 (日志 + JSON 编辑器) ---
     NSStackView *contentStack = [[NSStackView alloc] init];
     contentStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-    contentStack.distribution = NSStackViewDistributionFillEqually;
+    contentStack.distribution = NSStackViewDistributionFillEqually; // 左右平分
     contentStack.spacing = 20;
     
     [contentStack addArrangedSubview:[self createLogSection]];
@@ -93,8 +104,7 @@
     
     [mainStack addArrangedSubview:contentStack];
     
-    // 布局约束
-    [actionRow.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
+    // [关键] 让 contentStack 填满 mainStack 的宽度
     [contentStack.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
     
     [self logToScreen:@"System initialized. Ready." type:LogLevelInfo];
