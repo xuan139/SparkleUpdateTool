@@ -33,9 +33,8 @@
 #pragma mark - Lifecycle & View Setup
 
 - (void)loadView {
-    NSView *view = [[NSView alloc] init];
-    // [修改] 将宽度从 600 改为 900，高度改为 600，防止右侧内容被挤出去
-//    NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 900, 600)];
+//    NSView *view = [[NSView alloc] init];
+    NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 1400, 800)];
     self.view = view;
 }
 
