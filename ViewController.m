@@ -4,8 +4,7 @@
 //
 //  Created by lijiaxi on 7/17/25.
 //
-//  Refactored with Product-Level UI Toolkit
-//  Fixed: JSON UI not showing, Thread 4 Crash, ARC Write-back, Layout Constraints
+//  Refactored Phase 1: Integrated DynamicJSONEditorView
 //
 
 #import "ViewController.h"
@@ -16,29 +15,29 @@
 #import "FileHelper.h"
 #import "AppUpdateViewController.h"
 
-// 引入新的 UI Toolkit
+// 引入 UI Toolkit
 #import "UIFactory.h"
 #import "UITheme.h"
 #import "AlertPresenter.h"
+#import "SmartLogView.h"
 
-// --- 关键修复 1: 定义一个 FlippedStackView ---
-// 解决 JSON 编辑器内容不显示或显示位置错误的问题
-@interface FlippedStackView : NSStackView
-@end
+// [新增] 引入新剥离的组件
+#import "DynamicJSONEditorView.h"
 
-@implementation FlippedStackView
-- (BOOL)isFlipped {
-    return YES; // 让坐标系从顶部开始，内容从上往下排
-}
+// [删除] FlippedStackView 类的定义已移除 (移入了 DynamicJSONEditorView.m)
+
+@interface ViewController ()
+
+// [新增] 私有属性持有新的编辑器组件
+@property (nonatomic, strong) DynamicJSONEditorView *jsonEditorView;
+
 @end
-// ----------------------------------------
 
 @implementation ViewController
 
 #pragma mark - Lifecycle & View Setup
 
 - (void)loadView {
-    // 1. 创建主 View，不设置 Frame，由 Window 决定
     NSView *view = [[NSView alloc] init];
     self.view = view;
 }
@@ -46,27 +45,22 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    // 初始化数据
-    self.jsonFieldMap = [NSMutableDictionary dictionary];
+    // [删除] self.jsonFieldMap = [NSMutableDictionary dictionary]; // 不再需要
     
-    // 2. 搭建 UI (Auto Layout)
     [self setupLayout];
-    
-    // 3. 初始化目录
     [self setupDir];
 }
 
 - (void)setupLayout {
-    // --- 主容器 (垂直 Stack) ---
+    // --- 主容器 ---
     NSStackView *mainStack = [[NSStackView alloc] init];
     mainStack.orientation = NSUserInterfaceLayoutOrientationVertical;
-    mainStack.alignment = NSLayoutAttributeLeading; // 使用 Leading 对齐
+    mainStack.alignment = NSLayoutAttributeLeading;
     mainStack.spacing = 16;
-    mainStack.edgeInsets = NSEdgeInsetsMake(20, 20, 20, 20); // 内边距
+    mainStack.edgeInsets = NSEdgeInsetsMake(20, 20, 20, 20);
     mainStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:mainStack];
     
-    // 约束：撑满整个 View
     [NSLayoutConstraint activateConstraints:@[
         [mainStack.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [mainStack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -74,111 +68,80 @@
         [mainStack.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
     ]];
 
-    // --- 1. 顶部：文件选择区 ---
-    
-    // 使用局部变量接收指针回写，解决 ARC Write-back 错误
+    // --- 1. 顶部：文件选择区 (代码保持不变) ---
     NSTextField *tempOldPathField = nil;
     NSButton *tempOldButton = nil;
-    
-    NSView *oldAppRow = [self createSelectionRowWithLabel:@"Old App:"
-                                                pathField:&tempOldPathField
-                                                   button:&tempOldButton
-                                                   action:@selector(selectOldApp)];
+    NSView *oldAppRow = [self createSelectionRowWithLabel:@"Old App:" pathField:&tempOldPathField button:&tempOldButton action:@selector(selectOldApp)];
     [mainStack addArrangedSubview:oldAppRow];
-    
     self.oldAppPathField = tempOldPathField;
     self.oldAppSelectButton = tempOldButton;
     
-    // New App Row
     NSTextField *tempNewPathField = nil;
     NSButton *tempNewButton = nil;
-    
-    NSView *newAppRow = [self createSelectionRowWithLabel:@"New App:"
-                                                pathField:&tempNewPathField
-                                                   button:&tempNewButton
-                                                   action:@selector(selectUpdatedApp)];
+    NSView *newAppRow = [self createSelectionRowWithLabel:@"New App:" pathField:&tempNewPathField button:&tempNewButton action:@selector(selectUpdatedApp)];
     [mainStack addArrangedSubview:newAppRow];
-    
     self.updatedAppPathField = tempNewPathField;
     self.updatedAppSelectButton = tempNewButton;
     
-    // --- 2. 顶部：操作按钮区 ---
+    // --- 2. 顶部：操作按钮区 (代码保持不变) ---
     NSStackView *actionRow = [[NSStackView alloc] init];
     actionRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     actionRow.spacing = 20;
-    // 确保 actionRow 本身横向填满
     [actionRow setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     
-    self.generateUpdateButton = [UIFactory primaryButtonWithTitle:@"Generate Delta"
-                                                           target:self
-                                                           action:@selector(generateUpdate)];
-    
-    self.applyUpdateButton = [UIFactory buttonWithTitle:@"Test Apply Delta"
-                                                 target:self
-                                                 action:@selector(setUpApplyUpdateWindow)];
+    self.generateUpdateButton = [UIFactory primaryButtonWithTitle:@"Generate Delta" target:self action:@selector(generateUpdate)];
+    self.applyUpdateButton = [UIFactory buttonWithTitle:@"Test Apply Delta" target:self action:@selector(setUpApplyUpdateWindow)];
     
     [actionRow addArrangedSubview:self.generateUpdateButton];
     [actionRow addArrangedSubview:self.applyUpdateButton];
-    // 添加弹簧视图，把按钮顶到左边
     [actionRow addArrangedSubview:[NSView new]];
-    
     [mainStack addArrangedSubview:actionRow];
-    // 让 ActionRow 宽度填满 MainStack
     [actionRow.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
     
     // --- 3. 底部：内容区 (日志 + JSON 编辑器) ---
     NSStackView *contentStack = [[NSStackView alloc] init];
     contentStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-    contentStack.distribution = NSStackViewDistributionFillEqually; // 左右等宽
+    contentStack.distribution = NSStackViewDistributionFillEqually;
     contentStack.spacing = 20;
     
     // 左侧：日志视图
     [contentStack addArrangedSubview:[self createLogSection]];
     
-    // 右侧：JSON 编辑器
+    // [修改] 右侧：JSON 编辑器 (调用更新后的方法)
     [contentStack addArrangedSubview:[self createJSONEditorSection]];
     
     [mainStack addArrangedSubview:contentStack];
-    // 让 ContentStack 宽度填满 MainStack
     [contentStack.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
     
     [self logMessage:@"System initialized. Ready."];
 }
 
-// 辅助：创建文件选择行
-- (NSView *)createSelectionRowWithLabel:(NSString *)text
-                              pathField:(NSTextField **)fieldPtr
-                                 button:(NSButton **)btnPtr
-                                 action:(SEL)action {
+// 辅助：创建文件选择行 (保持不变)
+- (NSView *)createSelectionRowWithLabel:(NSString *)text pathField:(NSTextField **)fieldPtr button:(NSButton **)btnPtr action:(SEL)action {
     NSStackView *row = [[NSStackView alloc] init];
     row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     row.spacing = 10;
     
-    // Label (定宽)
     NSTextField *label = [UIFactory labelWithText:text];
     [label.widthAnchor constraintEqualToConstant:80].active = YES;
     [row addArrangedSubview:label];
     
-    // Field (自动拉伸)
     NSTextField *field = [UIFactory pathDisplayFieldWithPlaceholder:@"Path not selected..."];
     [field setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     [row addArrangedSubview:field];
     if (fieldPtr) *fieldPtr = field;
     
-    // Button
     NSButton *btn = [UIFactory buttonWithTitle:@"Choose..." target:self action:action];
     [row addArrangedSubview:btn];
     if (btnPtr) *btnPtr = btn;
     
-    // NSLayoutAnchor 没有 priority 参数，必须分步写
     NSLayoutConstraint *widthConstraint = [row.widthAnchor constraintEqualToConstant:0];
-    widthConstraint.priority = NSLayoutPriorityFittingSizeCompression; // 允许被拉伸
+    widthConstraint.priority = NSLayoutPriorityFittingSizeCompression;
     widthConstraint.active = YES;
-    
     return row;
 }
 
-// 辅助：创建日志区域
+// 辅助：创建日志区域 (保持不变)
 - (NSView *)createLogSection {
     NSStackView *container = [[NSStackView alloc] init];
     container.orientation = NSUserInterfaceLayoutOrientationVertical;
@@ -187,17 +150,20 @@
     
     [container addArrangedSubview:[UIFactory labelWithText:@"Process Log:"]];
     
-    self.logView = [[SmartLogView alloc] init];
-    [container addArrangedSubview:self.logView];
+    // 强转以匹配属性类型（如果.h用了NSView）
+    SmartLogView *logV = [[SmartLogView alloc] init];
+    self.logView = logV;
     
-    // 约束日志视图宽高
+    [container addArrangedSubview:self.logView];
     [self.logView.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
     [self.logView.heightAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
     
     return container;
 }
 
-// 辅助：创建 JSON 编辑区域 (修复显示问题)
+// ----------------------------------------------------------------
+// [修改] 辅助：创建 JSON 编辑区域 (大幅简化)
+// ----------------------------------------------------------------
 - (NSView *)createJSONEditorSection {
     NSStackView *container = [[NSStackView alloc] init];
     container.orientation = NSUserInterfaceLayoutOrientationVertical;
@@ -206,31 +172,13 @@
     
     [container addArrangedSubview:[UIFactory labelWithText:@"Appcast JSON Editor:"]];
     
-    // 滚动区域
-    NSScrollView *scrollView = [[NSScrollView alloc] init];
-    scrollView.hasVerticalScroller = YES;
-    scrollView.autohidesScrollers = YES;
-    scrollView.borderType = NSBezelBorder;
-    scrollView.drawsBackground = NO; // 修复：透明背景
+    // [新增] 实例化 DynamicJSONEditorView
+    self.jsonEditorView = [[DynamicJSONEditorView alloc] init];
     
-    // 内部 StackView (用于动态添加行)
-    // 🛠 关键修复 1: 使用 FlippedStackView 确保从顶部开始排列
-    self.jsonEditorStack = [[FlippedStackView alloc] init];
-    self.jsonEditorStack.orientation = NSUserInterfaceLayoutOrientationVertical;
-    self.jsonEditorStack.alignment = NSLayoutAttributeLeading;
-    self.jsonEditorStack.spacing = 10;
-    self.jsonEditorStack.edgeInsets = NSEdgeInsetsMake(10, 10, 10, 10);
-    self.jsonEditorStack.translatesAutoresizingMaskIntoConstraints = NO; // 🛠 关键修复 2: 开启 AutoLayout
+    // 约束高度，确保有足够空间
+    [self.jsonEditorView.heightAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
     
-    // 将 StackView 放入 ScrollView
-    scrollView.documentView = self.jsonEditorStack;
-    
-    // 🛠 关键修复 3: 强制 StackView 宽度等于 ScrollView 内容区宽度
-    [self.jsonEditorStack.widthAnchor constraintEqualToAnchor:scrollView.contentView.widthAnchor].active = YES;
-    
-    // 约束 ScrollView 撑开
-    [scrollView.heightAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
-    [container addArrangedSubview:scrollView];
+    [container addArrangedSubview:self.jsonEditorView];
     
     // 底部按钮栏
     NSStackView *btnRow = [[NSStackView alloc] init];
@@ -241,20 +189,20 @@
     
     [container addArrangedSubview:btnRow];
     
-    // 约束 Container 宽度
-    [scrollView.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
+    // 宽度约束
+    [self.jsonEditorView.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
     [btnRow.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
 
     return container;
 }
 
-#pragma mark - 核心业务逻辑 (Refined Log & Alert)
+#pragma mark - 核心业务逻辑 (Log & Alert)
 
 - (void)logMessage:(NSString *)message {
-    // 1. 使用 SmartLogView 显示 (SmartLogView 内部已经确保了主线程)
-    [self.logView appendLog:message level:LogLevelInfo];
+    if ([self.logView isKindOfClass:[SmartLogView class]]) {
+        [(SmartLogView *)self.logView appendLog:message level:LogLevelInfo];
+    }
     
-    // 2. 写入文件
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
         [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
@@ -274,6 +222,7 @@
     });
 }
 
+// 目录设置 (保持不变)
 - (void)setupDir {
     _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
     _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
@@ -288,23 +237,26 @@
 }
 
 - (void)logAllImportantPaths {
-    [self.logView appendLog:[NSString stringWithFormat:@"📂 Output: %@", _outputDir] level:LogLevelWarning];
-    [self.logView appendLog:[NSString stringWithFormat:@"📂 Delta: %@", _deltaDir] level:LogLevelWarning];
-    [self.logView appendLog:[NSString stringWithFormat:@"📂 Logs: %@", _logFileDir] level:LogLevelWarning];
-    [self.logView appendLog:[NSString stringWithFormat:@"📂 JSON: %@", _jsonPath] level:LogLevelWarning];
+    if ([self.logView isKindOfClass:[SmartLogView class]]) {
+        SmartLogView *v = (SmartLogView *)self.logView;
+        [v appendLog:[NSString stringWithFormat:@"📂 Output: %@", _outputDir] level:LogLevelWarning];
+        [v appendLog:[NSString stringWithFormat:@"📂 Delta: %@", _deltaDir] level:LogLevelWarning];
+        [v appendLog:[NSString stringWithFormat:@"📂 Logs: %@", _logFileDir] level:LogLevelWarning];
+        [v appendLog:[NSString stringWithFormat:@"📂 JSON: %@", _jsonPath] level:LogLevelWarning];
+    }
 }
 
-#pragma mark - Actions: Select App
+#pragma mark - Actions: Select App (保持不变)
 
 - (void)selectOldApp {
     NSString *path = [self openAppFromSubdirectory:@"sparkleOldApp"];
     if (path) {
         _oldAppDir = path;
         self.oldAppPathField.stringValue = path;
-        [self.logView appendLog:[NSString stringWithFormat:@"✅ Selected Old App: %@", path] level:LogLevelSuccess];
+        [(SmartLogView *)self.logView appendLog:[NSString stringWithFormat:@"✅ Selected Old App: %@", path] level:LogLevelSuccess];
         
         NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:path logBlock:^(NSString *msg) {
-            [self.logView appendLog:msg level:LogLevelInfo];
+            [(SmartLogView *)self.logView appendLog:msg level:LogLevelInfo];
         }];
         
         if (versionInfo) {
@@ -322,10 +274,10 @@
     if (path) {
         _NewAppDir = path;
         self.updatedAppPathField.stringValue = path;
-        [self.logView appendLog:[NSString stringWithFormat:@"✅ Selected New App: %@", path] level:LogLevelSuccess];
+        [(SmartLogView *)self.logView appendLog:[NSString stringWithFormat:@"✅ Selected New App: %@", path] level:LogLevelSuccess];
         
         NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:path logBlock:^(NSString *msg) {
-            [self.logView appendLog:msg level:LogLevelInfo];
+            [(SmartLogView *)self.logView appendLog:msg level:LogLevelInfo];
         }];
         
         if (versionInfo) {
@@ -340,7 +292,6 @@
 - (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
-    
     [[NSFileManager defaultManager] createDirectoryAtPath:fullPath withIntermediateDirectories:YES attributes:nil error:nil];
 
     NSOpenPanel *panel = [NSOpenPanel openPanel];
@@ -353,10 +304,10 @@
     return ([panel runModal] == NSModalResponseOK) ? panel.URL.path : nil;
 }
 
-#pragma mark - Actions: Generate
+#pragma mark - Actions: Generate (保持不变)
 
 - (void)generateUpdate {
-    [self.logView appendLog:@"🚀 Starting Generation Process..." level:LogLevelInfo];
+    [(SmartLogView *)self.logView appendLog:@"🚀 Starting Generation Process..." level:LogLevelInfo];
     
     if (_oldAppDir.length == 0 || _NewAppDir.length == 0) {
         [AlertPresenter showError:@"Please select both Old and New Apps first." inWindow:self.view.window];
@@ -367,7 +318,7 @@
     if (!_deltaPath) return;
     
     self.generateUpdateButton.enabled = NO;
-    [self.logView appendLog:@"⏳ Generating Delta Patch (Async)..." level:LogLevelWarning];
+    [(SmartLogView *)self.logView appendLog:@"⏳ Generating Delta Patch (Async)..." level:LogLevelWarning];
 
     __weak typeof(self) weakSelf = self;
 
@@ -375,11 +326,11 @@
                                      toNewPath:self.NewAppDir
                                     outputPath:self.deltaPath
                                       logBlock:^(NSString *log) {
-        [weakSelf.logView appendLog:log level:LogLevelInfo];
+        [(SmartLogView *)weakSelf.logView appendLog:log level:LogLevelInfo];
     } completion:^(BOOL success, NSError *error) {
         
         if (success) {
-            [weakSelf.logView appendLog:@"✅ Delta Patch Generated Successfully!" level:LogLevelSuccess];
+            [(SmartLogView *)weakSelf.logView appendLog:@"✅ Delta Patch Generated Successfully!" level:LogLevelSuccess];
             
             [FileHelper copyFileAtPath:weakSelf.oldAppDir toDirectory:weakSelf.outputDir];
             [FileHelper copyFileAtPath:weakSelf.NewAppDir toDirectory:weakSelf.outputDir];
@@ -387,6 +338,7 @@
             
             [AlertPresenter showSuccess:[NSString stringWithFormat:@"Delta created at: %@", weakSelf.deltaPath] inWindow:weakSelf.view.window];
 
+            // ... (保持原有的 URL 拼接逻辑) ...
             NSString *baseURL = @"https://unigo.ai/uploads/";
             NSString *appName = weakSelf.appName;
             NSString *lastVersion = weakSelf.oldVersion;
@@ -404,18 +356,16 @@
             
             NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
             
-            [weakSelf.logView appendLog:@"📦 Zipping application..." level:LogLevelInfo];
+            [(SmartLogView *)weakSelf.logView appendLog:@"📦 Zipping application..." level:LogLevelInfo];
             
-            // FileHelper 的 completion 是在后台线程执行的
             [FileHelper zipAppAtPath:appFilePath logBlock:^(NSString *message) {
-                 [weakSelf.logView appendLog:message level:LogLevelInfo];
+                 [(SmartLogView *)weakSelf.logView appendLog:message level:LogLevelInfo];
             } completion:^(NSString *zipFilePath) {
                 
-                // --- 这里是在后台线程 ---
-                
                 NSString *zipfileSize = [NSString stringWithFormat:@"%llu", [FileHelper fileSizeAtPath:zipFilePath]];
-                
                 NSError *jsonError = nil;
+                
+                // 调用下方的辅助方法生成 JSON
                 BOOL jsonSuccess = [weakSelf generateFullVersionJSONWithAppName:appName
                                                                     lastVersion:lastVersion
                                                                   latestVersion:latestVersion
@@ -429,23 +379,22 @@
                                                                        jsonPath:jsonPath
                                                                           error:&jsonError];
                 
-                // 🛠 关键修复: 切换回主线程进行 UI 更新 (修复 Thread 4 Crash)
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (jsonSuccess) {
-                        [weakSelf.logView appendLog:@"✅ JSON Created!" level:LogLevelSuccess];
+                        [(SmartLogView *)weakSelf.logView appendLog:@"✅ JSON Created!" level:LogLevelSuccess];
                         [AlertPresenter showSuccess:@"JSON file generated successfully." inWindow:weakSelf.view.window];
+                        // [修改] 调用新方法加载 JSON
                         [weakSelf loadJSONFromFileAtPath:jsonPath];
                     } else {
-                        [weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ JSON Generation Failed: %@", jsonError] level:LogLevelError];
+                        [(SmartLogView *)weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ JSON Generation Failed: %@", jsonError] level:LogLevelError];
                     }
-                    
                     weakSelf.generateUpdateButton.enabled = YES;
                 });
             }];
             
         } else {
             NSString *err = error.localizedDescription;
-            [weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ Generation Failed: %@", err] level:LogLevelError];
+            [(SmartLogView *)weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ Generation Failed: %@", err] level:LogLevelError];
             [AlertPresenter showError:err inWindow:weakSelf.view.window];
             weakSelf.generateUpdateButton.enabled = YES;
         }
@@ -457,11 +406,9 @@
     [alert setMessageText:@"Enter Delta Filename"];
     [alert addButtonWithTitle:@"OK"];
     [alert addButtonWithTitle:@"Cancel"];
-    
     NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
     input.stringValue = [NSString stringWithFormat:@"%@-%@.delta", _appNameOld ?: @"App", _NewVersion ?: @"vNew"];
     [alert setAccessoryView:input];
-    
     if ([alert runModal] == NSAlertFirstButtonReturn) {
         NSString *name = input.stringValue;
         if (name.length == 0) name = @"update.delta";
@@ -480,12 +427,13 @@
     [window setTitle:@"Test Apply Update"];
     [window setContentViewController:vc];
     [window center];
-    
     self.updateWindowController = [[NSWindowController alloc] initWithWindow:window];
     [self.updateWindowController showWindow:self];
 }
 
-// --- JSON 编辑器逻辑 (Auto Layout 适配版) ---
+// ----------------------------------------------------------------
+// [修改] JSON 核心逻辑：全部委托给 jsonEditorView
+// ----------------------------------------------------------------
 
 - (void)loadJSONFromFileAtPath:(NSString *)filePath {
     NSData *data = [NSData dataWithContentsOfFile:filePath];
@@ -502,90 +450,31 @@
 
 - (void)loadJSONFromData:(NSData *)data {
     if (!data) return;
-    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
-    if (!dict) return;
+    NSError *error = nil;
+    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&error];
     
-    // 🛠 关键修复: 确保在主线程更新 UI
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self.currentJSON = dict;
+    if (dict) {
+        // [修改] 直接调用组件方法
+        [self.jsonEditorView reloadDataWithJSON:dict];
         
-        // 1. 清空现有的 Field (使用 copy 防止遍历时修改数组崩溃)
-        NSArray *existingViews = [self.jsonEditorStack.arrangedSubviews copy];
-        for (NSView *view in existingViews) {
-            [self.jsonEditorStack removeView:view];
-            [view removeFromSuperview];
-        }
-        [self.jsonFieldMap removeAllObjects];
-        
-        // 2. 递归创建新 UI
-        [self createFieldsForJSON:dict prefix:@"" indent:0];
-        
-        // 3. 强制刷新布局
-        [self.jsonEditorStack layoutSubtreeIfNeeded];
-        
-        [self.logView appendLog:@"JSON Loaded into UI." level:LogLevelSuccess];
-    });
-}
-
-- (void)createFieldsForJSON:(NSDictionary *)json prefix:(NSString *)prefix indent:(CGFloat)indent {
-    [json enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
-        NSString *fullKey = prefix.length ? [NSString stringWithFormat:@"%@.%@", prefix, key] : key;
-        
-        if ([obj isKindOfClass:[NSDictionary class]]) {
-            NSTextField *groupLabel = [UIFactory labelWithText:key];
-            groupLabel.font = [NSFont boldSystemFontOfSize:12];
-            
-            NSStackView *groupRow = [[NSStackView alloc] init];
-            groupRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-            [groupRow addArrangedSubview:[[NSView alloc] initWithFrame:NSMakeRect(0, 0, indent, 10)]];
-            [groupRow addArrangedSubview:groupLabel];
-            [self.jsonEditorStack addArrangedSubview:groupRow];
-            
-            [groupRow.widthAnchor constraintEqualToAnchor:self.jsonEditorStack.widthAnchor].active = NO;
-            
-            [self createFieldsForJSON:obj prefix:fullKey indent:indent + 20];
-            
-        } else {
-            NSStackView *row = [[NSStackView alloc] init];
-            row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-            
-            if (indent > 0) {
-                 [row addArrangedSubview:[[NSView alloc] initWithFrame:NSMakeRect(0, 0, indent, 10)]];
-            }
-            
-            NSTextField *keyLabel = [UIFactory labelWithText:key];
-            [keyLabel.widthAnchor constraintEqualToConstant:100].active = YES;
-            [row addArrangedSubview:keyLabel];
-            
-            NSTextField *valField = [[NSTextField alloc] init];
-            valField.stringValue = [NSString stringWithFormat:@"%@", obj];
-            valField.toolTip = fullKey;
-            [valField setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
-            [row addArrangedSubview:valField];
-            
-            [self.jsonEditorStack addArrangedSubview:row];
-            self.jsonFieldMap[fullKey] = valField;
-            
-             [row.widthAnchor constraintEqualToAnchor:self.jsonEditorStack.widthAnchor].active = YES;
-        }
-    }];
+        [(SmartLogView *)self.logView appendLog:@"JSON Loaded into UI." level:LogLevelSuccess];
+    } else {
+        [(SmartLogView *)self.logView appendLog:@"❌ Failed to parse JSON data." level:LogLevelError];
+    }
 }
 
 - (void)saveJSONToFile {
-    [self.view.window makeFirstResponder:nil];
+    [self.view.window makeFirstResponder:nil]; // 确保当前输入框失去焦点，完成提交
     
-    NSString *fileName = self.jsonFieldMap[@"appName"].stringValue ?: @"update";
+    // [修改] 从组件获取最终数据
+    NSDictionary *finalJSON = [self.jsonEditorView exportJSON];
     
-    NSMutableDictionary *flatJSON = [NSMutableDictionary dictionary];
-    for (NSString *key in self.jsonFieldMap) {
-        flatJSON[key] = self.jsonFieldMap[key].stringValue;
-    }
+    // 获取文件名逻辑
+    NSString *fileName = finalJSON[@"appName"] ?: @"update";
+    if ([fileName isKindOfClass:[NSNull class]]) fileName = @"update";
     
-    NSDictionary *nested = [self reconstructNestedDictionaryFromFlat:flatJSON];
-    
-    // 使用局部变量接收 error，解决 Write-back 错误
     NSError *error = nil;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:nested options:NSJSONWritingPrettyPrinted error:&error];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:finalJSON options:NSJSONWritingPrettyPrinted error:&error];
     
     if (error) {
         [AlertPresenter showError:[NSString stringWithFormat:@"Serialization Failed: %@", error.localizedDescription] inWindow:self.view.window];
@@ -603,24 +492,10 @@
     }
 }
 
-- (NSDictionary *)reconstructNestedDictionaryFromFlat:(NSDictionary *)flatDict {
-    NSMutableDictionary *nested = [NSMutableDictionary dictionary];
-    for (NSString *flatKey in flatDict) {
-        NSArray *components = [flatKey componentsSeparatedByString:@"."];
-        NSMutableDictionary *current = nested;
-        for (NSInteger i = 0; i < components.count; i++) {
-            NSString *part = components[i];
-            if (i == components.count - 1) {
-                current[part] = flatDict[flatKey];
-            } else {
-                if (!current[part]) current[part] = [NSMutableDictionary dictionary];
-                current = current[part];
-            }
-        }
-    }
-    return nested;
-}
+// [删除] reconstructNestedDictionaryFromFlat 方法已删除
+// [删除] createFieldsForJSON 方法已删除
 
+// 辅助方法：生成 JSON (暂时保留在 VC，下一阶段重构业务逻辑时移除)
 - (BOOL)generateFullVersionJSONWithAppName:(NSString *)appName
                                 lastVersion:(NSString *)lastVersion
                                latestVersion:(NSString *)latestVersion

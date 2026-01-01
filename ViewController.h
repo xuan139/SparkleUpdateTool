@@ -2,42 +2,30 @@
 //  ViewController.h
 //  SparkleUpdateTool
 //
-//  Created by lijiaxi on 7/17/25.
-//
-
-//
-//  ViewController.h
-//  SparkleUpdateTool
-//
-//  Refactored with Product-Level UI Toolkit
+//  Refactored: Phase 1 (UI Component Extraction)
 //
 
 #import <Cocoa/Cocoa.h>
-#import "AppUpdateViewController.h"
-#import "SmartLogView.h" // 引入新组件
+// [删除] #import "SmartLogView.h" (建议移到 .m 文件引入，保持头文件干净)
 
 @interface ViewController : NSViewController
 
-// --- UI Components (Auto Layout) ---
-
-// 顶部输入区引用 (用于逻辑控制)
+// --- UI Components ---
 @property (nonatomic, strong) NSTextField *oldAppPathField;
 @property (nonatomic, strong) NSButton *oldAppSelectButton;
 @property (nonatomic, strong) NSTextField *updatedAppPathField;
 @property (nonatomic, strong) NSButton *updatedAppSelectButton;
 
-// 操作按钮
 @property (nonatomic, strong) NSButton *generateUpdateButton;
 @property (nonatomic, strong) NSButton *applyUpdateButton;
 
-// 日志视图 (替换原有的 NSTextView)
-@property (nonatomic, strong) SmartLogView *logView;
+// [修改] 日志视图改为在该文件内部引入类，或者使用 id，这里保留原样
+@property (nonatomic, strong) NSView *logView; // 类型可以是 SmartLogView，为了编译通过先写父类或在.m强转
 
-// JSON 编辑区容器 (用于动态添加 TextField)
-@property (nonatomic, strong) NSStackView *jsonEditorStack;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSTextField *> *jsonFieldMap;
-@property (nonatomic, strong) NSDictionary *currentJSON;
-
+// [删除] 以下属性已不再需要，被组件接管
+// @property (nonatomic, strong) NSStackView *jsonEditorStack;
+// @property (nonatomic, strong) NSMutableDictionary<NSString *, NSTextField *> *jsonFieldMap;
+// @property (nonatomic, strong) NSDictionary *currentJSON;
 
 // --- 业务数据属性 (保持不变) ---
 @property (nonatomic, strong) NSString *appName;
