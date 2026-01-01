@@ -167,62 +167,37 @@
     NSString *oldAppDirPath = self.oldAppDir;
     NSString *newDir = [[oldAppDirPath stringByDeletingLastPathComponent] stringByAppendingPathComponent:NewAppName];
 
-    // 调用 applyDelta
-    BOOL success = [BinaryDeltaManager applyDelta:self.deltaDir
-                          toOldDir:self.oldAppDir
-                           toNewDir:newDir
-                           logBlock:^(NSString *log) {
-        [self logMessage:log];
-    }];
+    // 1. 禁用按钮，防止重复点击
+    self.okButton.enabled = NO;
+    [self logMessage:@"⏳ Applying delta..."];
 
-    if (success) {
-        [self logMessage:[NSString stringWithFormat:@"✅ updated App generated: %@", newDir]];
-        [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
-                                    message:@"success updated App and copy to _outputDir."];
-     } else {
-        [self logMessage:@"❌ update New App failed "];
-        [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
-                                     message:@"update New App failed ."];
-    }
+    // 2. 使用新的异步接口 (带 completion 参数)
+    [BinaryDeltaManager applyDelta:self.deltaDir
+                          toOldDir:self.oldAppDir
+                          toNewDir:newDir
+                          logBlock:^(NSString *log) {
+        // 实时日志回调
+        [self logMessage:log];
+    } completion:^(BOOL success, NSError *error) {
+        
+        // 3. 完成回调 (已在主线程)
+        
+        // 无论成功失败，先恢复按钮
+        self.okButton.enabled = YES;
+        
+        if (success) {
+            [self logMessage:[NSString stringWithFormat:@"✅ updated App generated: %@", newDir]];
+            [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
+                                        message:@"Success updated App and copy to _outputDir."];
+        } else {
+            NSString *errorMsg = error.localizedDescription ?: @"Unknown error";
+            [self logMessage:[NSString stringWithFormat:@"❌ update New App failed: %@", errorMsg]];
+            [UIHelper showSuccessAlertWithTitle:@"❌ Failed!"
+                                        message:errorMsg];
+        }
+    }];
 }
 
-//-(BOOL)applyDelta:(NSString *)deltaPath
-//         toOldDir:(NSString *)oldDir
-//         toNewDir:(NSString *)newDir
-//         logBlock:(void (^)(NSString *log))logBlock {
-//
-//    NSTask *task = [[NSTask alloc] init];
-//    task.launchPath = @"/usr/local/bin/binarydelta";
-//    task.arguments = @[@"apply", @"--verbose", oldDir, newDir, deltaPath];
-//
-//    NSPipe *pipe = [NSPipe pipe];
-//    task.standardOutput = pipe;
-//    task.standardError = pipe;
-//
-//    NSFileHandle *readHandle = [pipe fileHandleForReading];
-//
-//    @try {
-//        [task launch];
-//        [task waitUntilExit];
-//    } @catch (NSException *exception) {
-//        NSString *errorMsg = [NSString stringWithFormat:@"❌ Failed to launch binarydelta apply: %@", exception.reason];
-//        if (logBlock) logBlock(errorMsg);
-//        return NO;
-//    }
-//
-//    NSData *outputData = [readHandle readDataToEndOfFile];
-//    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-//    
-//    if (logBlock) logBlock(output);
-//
-//    if (task.terminationStatus == 0) {
-//        if (logBlock) logBlock([NSString stringWithFormat:@"✅ apply delta success: %@", newDir]);
-//        return YES;
-//    } else {
-//        if (logBlock) logBlock([NSString stringWithFormat:@"❌ apply delta failed\n%@", output]);
-//        return NO;
-//    }
-//}
 
 - (void)cancelButtonPressed {
     [self logMessage:@"🚫 Cancel"];

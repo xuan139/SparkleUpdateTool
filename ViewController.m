@@ -4,333 +4,605 @@
 //
 //  Created by lijiaxi on 7/17/25.
 //
-#import <Cocoa/Cocoa.h>
+//  Refactored with Product-Level UI Toolkit
+//  Fixed: JSON UI not showing, Thread 4 Crash, ARC Write-back, Layout Constraints
+//
+
 #import "ViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+// 引入业务逻辑类
 #import "BinaryDeltaManager.h"
 #import "FileHelper.h"
-#import "AppcastGenerator.h"
 #import "AppUpdateViewController.h"
-#import "UIHelper.h"
+
+// 引入新的 UI Toolkit
+#import "UIFactory.h"
+#import "UITheme.h"
+#import "AlertPresenter.h"
+
+// --- 关键修复 1: 定义一个 FlippedStackView ---
+// 解决 JSON 编辑器内容不显示或显示位置错误的问题
+@interface FlippedStackView : NSStackView
+@end
+
+@implementation FlippedStackView
+- (BOOL)isFlipped {
+    return YES; // 让坐标系从顶部开始，内容从上往下排
+}
+@end
+// ----------------------------------------
 
 @implementation ViewController
 
+#pragma mark - Lifecycle & View Setup
+
 - (void)loadView {
-    // 创建根视图
-    [self setupRootViewWithWidthRatio:0.9 heightRatio:0.9];
-}
-
-
-// 创建一个动态大小的根视图，宽高为屏幕比例
-- (void)setupRootViewWithWidthRatio:(CGFloat)widthRatio heightRatio:(CGFloat)heightRatio {
-    NSScreen *screen = [NSScreen mainScreen];
-    NSRect screenFrame = [screen visibleFrame];
-
-    CGFloat width = screenFrame.size.width * widthRatio;
-    CGFloat height = screenFrame.size.height * heightRatio;
-
-    self.view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height)];
+    // 1. 创建主 View，不设置 Frame，由 Window 决定
+    NSView *view = [[NSView alloc] init];
+    self.view = view;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    [self setupUI];
-    [self setupDir];
-    // 初始化字典
+    
+    // 初始化数据
     self.jsonFieldMap = [NSMutableDictionary dictionary];
     
+    // 2. 搭建 UI (Auto Layout)
+    [self setupLayout];
+    
+    // 3. 初始化目录
+    [self setupDir];
 }
 
-#pragma mark - setupUI
-- (void)setupUI {
-    // 起始位置
-    CGFloat startX = 10;
-    CGFloat startY = 660;  // 顶部向下起始 这是Y在左下角开始的原因
-    CGFloat verticalSpacing = 40;
-
-    // 各控件宽度
-    CGFloat labelWidth = 100;
-    CGFloat fieldWidth = 360;
-    CGFloat buttonWidth = 80;
-
-    // --- Old App ---
-    NSDictionary *oldAppControls = [self setupAppSelectorWithLabel:@"Old App"
-                                                             action:@selector(selectOldApp)
-                                                               x:startX
-                                                               y:startY
-                                                        labelWidth:labelWidth
-                                                        fieldWidth:fieldWidth
-                                                       buttonWidth:buttonWidth];
-    self.oldAppLabel = oldAppControls[@"label"];
-    self.oldAppPathField = oldAppControls[@"field"];
-    self.oldAppSelectButton = oldAppControls[@"button"];
-
-    // --- New App ---
-    NSDictionary *newAppControls = [self setupAppSelectorWithLabel:@"New App"
-                                                             action:@selector(selectUpdatedApp)
-                                                               x:startX
-                                                               y:startY - verticalSpacing
-                                                        labelWidth:labelWidth
-                                                        fieldWidth:fieldWidth
-                                                       buttonWidth:buttonWidth];
-    self.updatedAppLabel = newAppControls[@"label"];
-    self.updatedAppPathField = newAppControls[@"field"];
-    self.updatedAppSelectButton = newAppControls[@"button"];
-
-    // --- Generate & Apply Buttons ---
-    [self setupGenerateButtonAtX:startX
-                               y:startY - verticalSpacing * 2
-                             width:160
-                           spacing:20];
-
-    CGFloat logHeight = 500;
-    CGFloat logWidth = 550;
-    CGFloat logY = startY - verticalSpacing * 2 - 50 - logHeight;
-
-    NSTextView *logTextView = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, logWidth, logHeight)];
-    logTextView.editable = NO;
-    logTextView.font = [NSFont systemFontOfSize:16];  // 字体大小，可调，比如 14 或 16
-
-    NSScrollView *logScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(startX, logY, logWidth, logHeight)];
-    logScrollView.documentView = logTextView;
-    logScrollView.hasVerticalScroller = YES;
-    logScrollView.hasHorizontalScroller = YES;
-    logScrollView.autohidesScrollers = YES;
-
-    [self.view addSubview:logScrollView];
-    self.logTextView = logTextView;
-
-    [self logMessage:@"Begin logging"];
-
+- (void)setupLayout {
+    // --- 主容器 (垂直 Stack) ---
+    NSStackView *mainStack = [[NSStackView alloc] init];
+    mainStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    mainStack.alignment = NSLayoutAttributeLeading; // 使用 Leading 对齐
+    mainStack.spacing = 16;
+    mainStack.edgeInsets = NSEdgeInsetsMake(20, 20, 20, 20); // 内边距
+    mainStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:mainStack];
     
-    // JSON 编辑区域
-    CGFloat jsonStartX = startX + labelWidth + fieldWidth + 150;
-    CGFloat jsonStartY = startY+20;
-    CGFloat jsonWidth = 500;
-    CGFloat jsonHeight = 620;
+    // 约束：撑满整个 View
+    [NSLayoutConstraint activateConstraints:@[
+        [mainStack.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [mainStack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [mainStack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [mainStack.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ]];
 
-    self.jsonScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight, jsonWidth, jsonHeight)];
-    self.jsonScrollView.hasVerticalScroller = YES;
-    self.jsonScrollView.autohidesScrollers = YES;
-    [self.view addSubview:self.jsonScrollView];
-
+    // --- 1. 顶部：文件选择区 ---
     
-    // Container
-    NSView *jsonContainer = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, jsonWidth, jsonHeight)];
+    // 使用局部变量接收指针回写，解决 ARC Write-back 错误
+    NSTextField *tempOldPathField = nil;
+    NSButton *tempOldButton = nil;
     
-    jsonContainer.autoresizingMask = NSViewWidthSizable;
-
-    self.jsonScrollView.documentView = jsonContainer;
-
-    // 控件尺寸
-    CGFloat padding = 10;
-    CGFloat labelWidthJSON = 120;
-    CGFloat fieldWidthJSON = jsonWidth - labelWidthJSON - padding*2;
-    CGFloat fieldHeight = 24;
-    verticalSpacing = 20;
-
-    // 坐标从顶部向下
-    __block CGFloat currentY = jsonHeight - fieldHeight - padding;
-
-    [self.currentJSON enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
-        NSTextField *keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, currentY, labelWidthJSON, fieldHeight)];
-        keyLabel.stringValue = key;
-        keyLabel.bezeled = NO;
-        keyLabel.drawsBackground = NO;
-        keyLabel.editable = NO;
-        keyLabel.selectable = NO;
-        [jsonContainer addSubview:keyLabel];
-        
-        NSTextField *valueField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidthJSON, currentY, fieldWidthJSON, fieldHeight)];
-        valueField.stringValue = [NSString stringWithFormat:@"%@", obj];
-        [jsonContainer addSubview:valueField];
-        
-        self.jsonFieldMap[key] = valueField;
-        
-        currentY -= verticalSpacing;
-    }];
-
-    // --- Save Button（固定在 ScrollView 下方） ---
-    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(jsonStartX, jsonStartY - jsonHeight - 40, 80, 30)];
-    [saveButton setTitle:@"Save"];
-    [saveButton setTarget:self];
-    [saveButton setAction:@selector(saveJSONToFile)];
-    [self.view addSubview:saveButton];
-
-    // --- Load Button（Save 右边 10px） ---
-    NSButton *loadButton = [[NSButton alloc] initWithFrame:NSMakeRect(jsonStartX + 90, jsonStartY - jsonHeight - 40, 80, 30)];
-    [loadButton setTitle:@"Load"];
-    [loadButton setTarget:self];
-    [loadButton setAction:@selector(loadJSONFromFile)];
-    [self.view addSubview:loadButton];
-
+    NSView *oldAppRow = [self createSelectionRowWithLabel:@"Old App:"
+                                                pathField:&tempOldPathField
+                                                   button:&tempOldButton
+                                                   action:@selector(selectOldApp)];
+    [mainStack addArrangedSubview:oldAppRow];
+    
+    self.oldAppPathField = tempOldPathField;
+    self.oldAppSelectButton = tempOldButton;
+    
+    // New App Row
+    NSTextField *tempNewPathField = nil;
+    NSButton *tempNewButton = nil;
+    
+    NSView *newAppRow = [self createSelectionRowWithLabel:@"New App:"
+                                                pathField:&tempNewPathField
+                                                   button:&tempNewButton
+                                                   action:@selector(selectUpdatedApp)];
+    [mainStack addArrangedSubview:newAppRow];
+    
+    self.updatedAppPathField = tempNewPathField;
+    self.updatedAppSelectButton = tempNewButton;
+    
+    // --- 2. 顶部：操作按钮区 ---
+    NSStackView *actionRow = [[NSStackView alloc] init];
+    actionRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    actionRow.spacing = 20;
+    // 确保 actionRow 本身横向填满
+    [actionRow setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    
+    self.generateUpdateButton = [UIFactory primaryButtonWithTitle:@"Generate Delta"
+                                                           target:self
+                                                           action:@selector(generateUpdate)];
+    
+    self.applyUpdateButton = [UIFactory buttonWithTitle:@"Test Apply Delta"
+                                                 target:self
+                                                 action:@selector(setUpApplyUpdateWindow)];
+    
+    [actionRow addArrangedSubview:self.generateUpdateButton];
+    [actionRow addArrangedSubview:self.applyUpdateButton];
+    // 添加弹簧视图，把按钮顶到左边
+    [actionRow addArrangedSubview:[NSView new]];
+    
+    [mainStack addArrangedSubview:actionRow];
+    // 让 ActionRow 宽度填满 MainStack
+    [actionRow.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
+    
+    // --- 3. 底部：内容区 (日志 + JSON 编辑器) ---
+    NSStackView *contentStack = [[NSStackView alloc] init];
+    contentStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    contentStack.distribution = NSStackViewDistributionFillEqually; // 左右等宽
+    contentStack.spacing = 20;
+    
+    // 左侧：日志视图
+    [contentStack addArrangedSubview:[self createLogSection]];
+    
+    // 右侧：JSON 编辑器
+    [contentStack addArrangedSubview:[self createJSONEditorSection]];
+    
+    [mainStack addArrangedSubview:contentStack];
+    // 让 ContentStack 宽度填满 MainStack
+    [contentStack.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
+    
+    [self logMessage:@"System initialized. Ready."];
 }
 
+// 辅助：创建文件选择行
+- (NSView *)createSelectionRowWithLabel:(NSString *)text
+                              pathField:(NSTextField **)fieldPtr
+                                 button:(NSButton **)btnPtr
+                                 action:(SEL)action {
+    NSStackView *row = [[NSStackView alloc] init];
+    row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    row.spacing = 10;
+    
+    // Label (定宽)
+    NSTextField *label = [UIFactory labelWithText:text];
+    [label.widthAnchor constraintEqualToConstant:80].active = YES;
+    [row addArrangedSubview:label];
+    
+    // Field (自动拉伸)
+    NSTextField *field = [UIFactory pathDisplayFieldWithPlaceholder:@"Path not selected..."];
+    [field setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [row addArrangedSubview:field];
+    if (fieldPtr) *fieldPtr = field;
+    
+    // Button
+    NSButton *btn = [UIFactory buttonWithTitle:@"Choose..." target:self action:action];
+    [row addArrangedSubview:btn];
+    if (btnPtr) *btnPtr = btn;
+    
+    // NSLayoutAnchor 没有 priority 参数，必须分步写
+    NSLayoutConstraint *widthConstraint = [row.widthAnchor constraintEqualToConstant:0];
+    widthConstraint.priority = NSLayoutPriorityFittingSizeCompression; // 允许被拉伸
+    widthConstraint.active = YES;
+    
+    return row;
+}
 
-#pragma mark - 加载 JSON
-// 核心方法：解析 NSData 并生成 UI
-- (void)loadJSONFromData:(NSData *)data {
-    if (!data) { NSLog(@"❌ JSON 数据为空"); return; }
+// 辅助：创建日志区域
+- (NSView *)createLogSection {
+    NSStackView *container = [[NSStackView alloc] init];
+    container.orientation = NSUserInterfaceLayoutOrientationVertical;
+    container.alignment = NSLayoutAttributeLeading;
+    container.spacing = 8;
+    
+    [container addArrangedSubview:[UIFactory labelWithText:@"Process Log:"]];
+    
+    self.logView = [[SmartLogView alloc] init];
+    [container addArrangedSubview:self.logView];
+    
+    // 约束日志视图宽高
+    [self.logView.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
+    [self.logView.heightAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
+    
+    return container;
+}
 
-    NSError *error = nil;
-    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&error];
-    if (error || ![jsonDict isKindOfClass:[NSDictionary class]]) {
-        NSLog(@"❌ JSON 解析失败: %@", error);
-        return;
+// 辅助：创建 JSON 编辑区域 (修复显示问题)
+- (NSView *)createJSONEditorSection {
+    NSStackView *container = [[NSStackView alloc] init];
+    container.orientation = NSUserInterfaceLayoutOrientationVertical;
+    container.alignment = NSLayoutAttributeLeading;
+    container.spacing = 8;
+    
+    [container addArrangedSubview:[UIFactory labelWithText:@"Appcast JSON Editor:"]];
+    
+    // 滚动区域
+    NSScrollView *scrollView = [[NSScrollView alloc] init];
+    scrollView.hasVerticalScroller = YES;
+    scrollView.autohidesScrollers = YES;
+    scrollView.borderType = NSBezelBorder;
+    scrollView.drawsBackground = NO; // 修复：透明背景
+    
+    // 内部 StackView (用于动态添加行)
+    // 🛠 关键修复 1: 使用 FlippedStackView 确保从顶部开始排列
+    self.jsonEditorStack = [[FlippedStackView alloc] init];
+    self.jsonEditorStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    self.jsonEditorStack.alignment = NSLayoutAttributeLeading;
+    self.jsonEditorStack.spacing = 10;
+    self.jsonEditorStack.edgeInsets = NSEdgeInsetsMake(10, 10, 10, 10);
+    self.jsonEditorStack.translatesAutoresizingMaskIntoConstraints = NO; // 🛠 关键修复 2: 开启 AutoLayout
+    
+    // 将 StackView 放入 ScrollView
+    scrollView.documentView = self.jsonEditorStack;
+    
+    // 🛠 关键修复 3: 强制 StackView 宽度等于 ScrollView 内容区宽度
+    [self.jsonEditorStack.widthAnchor constraintEqualToAnchor:scrollView.contentView.widthAnchor].active = YES;
+    
+    // 约束 ScrollView 撑开
+    [scrollView.heightAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
+    [container addArrangedSubview:scrollView];
+    
+    // 底部按钮栏
+    NSStackView *btnRow = [[NSStackView alloc] init];
+    btnRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    [btnRow addArrangedSubview:[UIFactory buttonWithTitle:@"Save JSON" target:self action:@selector(saveJSONToFile)]];
+    [btnRow addArrangedSubview:[UIFactory buttonWithTitle:@"Load JSON" target:self action:@selector(loadJSONFromFile)]];
+    [btnRow addArrangedSubview:[NSView new]]; // Spacer
+    
+    [container addArrangedSubview:btnRow];
+    
+    // 约束 Container 宽度
+    [scrollView.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
+    [btnRow.widthAnchor constraintEqualToAnchor:container.widthAnchor].active = YES;
+
+    return container;
+}
+
+#pragma mark - 核心业务逻辑 (Refined Log & Alert)
+
+- (void)logMessage:(NSString *)message {
+    // 1. 使用 SmartLogView 显示 (SmartLogView 内部已经确保了主线程)
+    [self.logView appendLog:message level:LogLevelInfo];
+    
+    // 2. 写入文件
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+        [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
+        NSString *timestamp = [formatter stringFromDate:[NSDate date]];
+        NSString *timestampedMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
+        
+        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:self.logFileDir];
+        if (!fileHandle) {
+            [[NSFileManager defaultManager] createFileAtPath:self.logFileDir contents:nil attributes:nil];
+            fileHandle = [NSFileHandle fileHandleForWritingAtPath:self.logFileDir];
+        }
+        if (fileHandle) {
+            [fileHandle seekToEndOfFile];
+            [fileHandle writeData:[timestampedMessage dataUsingEncoding:NSUTF8StringEncoding]];
+            [fileHandle closeFile];
+        }
+    });
+}
+
+- (void)setupDir {
+    _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
+    _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
+    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
+    _jsonPath = [FileHelper fullPathInDocuments:@"sparkle_output/appVersion.json"];
+    
+    [FileHelper prepareEmptyFileAtPath:_deltaDir];
+    [FileHelper prepareEmptyFileAtPath:_logFileDir];
+    [FileHelper prepareEmptyFileAtPath:_jsonPath];
+     
+    [self logAllImportantPaths];
+}
+
+- (void)logAllImportantPaths {
+    [self.logView appendLog:[NSString stringWithFormat:@"📂 Output: %@", _outputDir] level:LogLevelWarning];
+    [self.logView appendLog:[NSString stringWithFormat:@"📂 Delta: %@", _deltaDir] level:LogLevelWarning];
+    [self.logView appendLog:[NSString stringWithFormat:@"📂 Logs: %@", _logFileDir] level:LogLevelWarning];
+    [self.logView appendLog:[NSString stringWithFormat:@"📂 JSON: %@", _jsonPath] level:LogLevelWarning];
+}
+
+#pragma mark - Actions: Select App
+
+- (void)selectOldApp {
+    NSString *path = [self openAppFromSubdirectory:@"sparkleOldApp"];
+    if (path) {
+        _oldAppDir = path;
+        self.oldAppPathField.stringValue = path;
+        [self.logView appendLog:[NSString stringWithFormat:@"✅ Selected Old App: %@", path] level:LogLevelSuccess];
+        
+        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:path logBlock:^(NSString *msg) {
+            [self.logView appendLog:msg level:LogLevelInfo];
+        }];
+        
+        if (versionInfo) {
+            _oldVersion = versionInfo[@"version"];
+            _oldBuildVersion = versionInfo[@"build"];
+            _appNameOld = versionInfo[@"appName"];
+            _appName = [FileHelper stripVersionFromAppName:_appNameOld];
+            [self logMessage:[NSString stringWithFormat:@"Version Info: %@ (%@)", _oldVersion, _oldBuildVersion]];
+        }
     }
-
-    NSLog(@"✅ 读取 JSON 成功: %@", jsonDict);
-
-    // 清理旧 UI
-    for (NSView *subview in self.jsonScrollView.documentView.subviews) {
-        [subview removeFromSuperview];
-    }
-    [self.jsonFieldMap removeAllObjects];
-
-    // 生成 UI（保持原有嵌套解析逻辑）
-    CGFloat padding = 10;
-    CGFloat labelWidth = 150;
-    CGFloat fieldWidth = 220;
-    CGFloat rowHeight = 30;
-    CGFloat currentY = self.jsonScrollView.contentSize.height - rowHeight - padding;
-
-    [self createFieldsForJSON:jsonDict inContainer:self.jsonScrollView.documentView atY:&currentY withPrefix:@"" indent:0];
-
 }
 
-// 弹出选择文件
-- (void)loadJSONFromFile {
+- (void)selectUpdatedApp {
+    NSString *path = [self openAppFromSubdirectory:@"sparkleNewApp"];
+    if (path) {
+        _NewAppDir = path;
+        self.updatedAppPathField.stringValue = path;
+        [self.logView appendLog:[NSString stringWithFormat:@"✅ Selected New App: %@", path] level:LogLevelSuccess];
+        
+        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:path logBlock:^(NSString *msg) {
+            [self.logView appendLog:msg level:LogLevelInfo];
+        }];
+        
+        if (versionInfo) {
+            _NewVersion = versionInfo[@"version"];
+            _NewBuildVersion = versionInfo[@"build"];
+            _appNameNew = versionInfo[@"appName"];
+            [self logMessage:[NSString stringWithFormat:@"Version Info: %@ (%@)", _NewVersion, _NewBuildVersion]];
+        }
+    }
+}
+
+- (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
+    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
+    
+    [[NSFileManager defaultManager] createDirectoryAtPath:fullPath withIntermediateDirectories:YES attributes:nil error:nil];
 
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = NO;
     panel.allowsMultipleSelection = NO;
-    panel.allowedFileTypes = @[@"json"];
-    panel.directoryURL = [NSURL fileURLWithPath:outputDir];
+    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
+    panel.directoryURL = [NSURL fileURLWithPath:fullPath];
 
-    if ([panel runModal] == NSModalResponseOK) {
-        NSURL *selectedFileURL = panel.URLs.firstObject;
-        if (!selectedFileURL) return;
-
-        NSData *data = [NSData dataWithContentsOfFile:selectedFileURL.path];
-        [self loadJSONFromData:data];
-    }
+    return ([panel runModal] == NSModalResponseOK) ? panel.URL.path : nil;
 }
 
-// 直接用路径加载
+#pragma mark - Actions: Generate
+
+- (void)generateUpdate {
+    [self.logView appendLog:@"🚀 Starting Generation Process..." level:LogLevelInfo];
+    
+    if (_oldAppDir.length == 0 || _NewAppDir.length == 0) {
+        [AlertPresenter showError:@"Please select both Old and New Apps first." inWindow:self.view.window];
+        return;
+    }
+    
+    _deltaPath = [self promptForDeltaFilePathWithBaseDir:_deltaDir];
+    if (!_deltaPath) return;
+    
+    self.generateUpdateButton.enabled = NO;
+    [self.logView appendLog:@"⏳ Generating Delta Patch (Async)..." level:LogLevelWarning];
+
+    __weak typeof(self) weakSelf = self;
+
+    [BinaryDeltaManager createDeltaFromOldPath:self.oldAppDir
+                                     toNewPath:self.NewAppDir
+                                    outputPath:self.deltaPath
+                                      logBlock:^(NSString *log) {
+        [weakSelf.logView appendLog:log level:LogLevelInfo];
+    } completion:^(BOOL success, NSError *error) {
+        
+        if (success) {
+            [weakSelf.logView appendLog:@"✅ Delta Patch Generated Successfully!" level:LogLevelSuccess];
+            
+            [FileHelper copyFileAtPath:weakSelf.oldAppDir toDirectory:weakSelf.outputDir];
+            [FileHelper copyFileAtPath:weakSelf.NewAppDir toDirectory:weakSelf.outputDir];
+            [FileHelper copyFileAtPath:weakSelf.deltaPath toDirectory:weakSelf.outputDir];
+            
+            [AlertPresenter showSuccess:[NSString stringWithFormat:@"Delta created at: %@", weakSelf.deltaPath] inWindow:weakSelf.view.window];
+
+            NSString *baseURL = @"https://unigo.ai/uploads/";
+            NSString *appName = weakSelf.appName;
+            NSString *lastVersion = weakSelf.oldVersion;
+            NSString *latestVersion = weakSelf.NewVersion;
+            
+            NSString *jsonPath = [FileHelper replaceFileNameInPath:weakSelf.jsonPath withNewName:appName];
+            NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@-%@.delta", appName, lastVersion, latestVersion];
+            NSString *deltaURL = [baseURL stringByAppendingString:deltaFileName];
+            NSString *downloadURL = [baseURL stringByAppendingString:[NSString stringWithFormat:@"%@-%@.zip", appName, latestVersion]];
+            
+            NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+            NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
+            NSString *deltaFilePath = [outputDir stringByAppendingPathComponent:deltaFileName];
+            NSString *appFilePath = [outputDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%@-%@.app", appName, latestVersion]];
+            
+            NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
+            
+            [weakSelf.logView appendLog:@"📦 Zipping application..." level:LogLevelInfo];
+            
+            // FileHelper 的 completion 是在后台线程执行的
+            [FileHelper zipAppAtPath:appFilePath logBlock:^(NSString *message) {
+                 [weakSelf.logView appendLog:message level:LogLevelInfo];
+            } completion:^(NSString *zipFilePath) {
+                
+                // --- 这里是在后台线程 ---
+                
+                NSString *zipfileSize = [NSString stringWithFormat:@"%llu", [FileHelper fileSizeAtPath:zipFilePath]];
+                
+                NSError *jsonError = nil;
+                BOOL jsonSuccess = [weakSelf generateFullVersionJSONWithAppName:appName
+                                                                    lastVersion:lastVersion
+                                                                  latestVersion:latestVersion
+                                                                  deltaFileName:deltaFileName
+                                                                      deltaSize:deltaSize
+                                                                    zipfileSize:zipfileSize
+                                                                       deltaURL:deltaURL
+                                                                    downloadURL:downloadURL
+                                                                    wineVersion:@"10.0"
+                                                                  preservePaths:@[@"steamapps", @"userdata", @"config"]
+                                                                       jsonPath:jsonPath
+                                                                          error:&jsonError];
+                
+                // 🛠 关键修复: 切换回主线程进行 UI 更新 (修复 Thread 4 Crash)
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (jsonSuccess) {
+                        [weakSelf.logView appendLog:@"✅ JSON Created!" level:LogLevelSuccess];
+                        [AlertPresenter showSuccess:@"JSON file generated successfully." inWindow:weakSelf.view.window];
+                        [weakSelf loadJSONFromFileAtPath:jsonPath];
+                    } else {
+                        [weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ JSON Generation Failed: %@", jsonError] level:LogLevelError];
+                    }
+                    
+                    weakSelf.generateUpdateButton.enabled = YES;
+                });
+            }];
+            
+        } else {
+            NSString *err = error.localizedDescription;
+            [weakSelf.logView appendLog:[NSString stringWithFormat:@"❌ Generation Failed: %@", err] level:LogLevelError];
+            [AlertPresenter showError:err inWindow:weakSelf.view.window];
+            weakSelf.generateUpdateButton.enabled = YES;
+        }
+    }];
+}
+
+- (NSString *)promptForDeltaFilePathWithBaseDir:(NSString *)baseDir {
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Enter Delta Filename"];
+    [alert addButtonWithTitle:@"OK"];
+    [alert addButtonWithTitle:@"Cancel"];
+    
+    NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
+    input.stringValue = [NSString stringWithFormat:@"%@-%@.delta", _appNameOld ?: @"App", _NewVersion ?: @"vNew"];
+    [alert setAccessoryView:input];
+    
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        NSString *name = input.stringValue;
+        if (name.length == 0) name = @"update.delta";
+        return [[baseDir stringByDeletingLastPathComponent] stringByAppendingPathComponent:name];
+    }
+    return nil;
+}
+
+#pragma mark - Actions: Test Apply & JSON Logic
+
+- (void)setUpApplyUpdateWindow {
+    AppUpdateViewController *vc = [[AppUpdateViewController alloc] init];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 450)
+                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+                                                     backing:NSBackingStoreBuffered defer:NO];
+    [window setTitle:@"Test Apply Update"];
+    [window setContentViewController:vc];
+    [window center];
+    
+    self.updateWindowController = [[NSWindowController alloc] initWithWindow:window];
+    [self.updateWindowController showWindow:self];
+}
+
+// --- JSON 编辑器逻辑 (Auto Layout 适配版) ---
+
 - (void)loadJSONFromFileAtPath:(NSString *)filePath {
     NSData *data = [NSData dataWithContentsOfFile:filePath];
     [self loadJSONFromData:data];
 }
 
+- (void)loadJSONFromFile {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedFileTypes = @[@"json"];
+    if ([panel runModal] == NSModalResponseOK) {
+        [self loadJSONFromFileAtPath:panel.URL.path];
+    }
+}
 
-// 递归生成 UI
-- (void)createFieldsForJSON:(NSDictionary *)json
-                 inContainer:(NSView *)container
-                        atY:(CGFloat *)currentY
-                   withPrefix:(NSString *)prefix
-                       indent:(CGFloat)indent {
+- (void)loadJSONFromData:(NSData *)data {
+    if (!data) return;
+    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
+    if (!dict) return;
+    
+    // 🛠 关键修复: 确保在主线程更新 UI
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.currentJSON = dict;
+        
+        // 1. 清空现有的 Field (使用 copy 防止遍历时修改数组崩溃)
+        NSArray *existingViews = [self.jsonEditorStack.arrangedSubviews copy];
+        for (NSView *view in existingViews) {
+            [self.jsonEditorStack removeView:view];
+            [view removeFromSuperview];
+        }
+        [self.jsonFieldMap removeAllObjects];
+        
+        // 2. 递归创建新 UI
+        [self createFieldsForJSON:dict prefix:@"" indent:0];
+        
+        // 3. 强制刷新布局
+        [self.jsonEditorStack layoutSubtreeIfNeeded];
+        
+        [self.logView appendLog:@"JSON Loaded into UI." level:LogLevelSuccess];
+    });
+}
 
-    CGFloat padding = 10;
-    CGFloat labelWidth = 120;
-    CGFloat fieldWidth = 320;
-    CGFloat rowHeight = 20;
-    CGFloat verticalSpacing = 10;
-
+- (void)createFieldsForJSON:(NSDictionary *)json prefix:(NSString *)prefix indent:(CGFloat)indent {
     [json enumerateKeysAndObjectsUsingBlock:^(NSString *key, id obj, BOOL *stop) {
         NSString *fullKey = prefix.length ? [NSString stringWithFormat:@"%@.%@", prefix, key] : key;
-
-        NSTextField *keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + indent, *currentY, labelWidth, rowHeight)];
-        keyLabel.stringValue = key;
-        keyLabel.editable = NO;
-        keyLabel.bezeled = NO;
-        keyLabel.drawsBackground = NO;
-        keyLabel.toolTip = fullKey;  // ✅ 设置 key tooltip
-        [container addSubview:keyLabel];
         
-
-
         if ([obj isKindOfClass:[NSDictionary class]]) {
-            *currentY -= (rowHeight + verticalSpacing);
-            [self createFieldsForJSON:obj inContainer:container atY:currentY withPrefix:fullKey indent:indent + 20];
+            NSTextField *groupLabel = [UIFactory labelWithText:key];
+            groupLabel.font = [NSFont boldSystemFontOfSize:12];
+            
+            NSStackView *groupRow = [[NSStackView alloc] init];
+            groupRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+            [groupRow addArrangedSubview:[[NSView alloc] initWithFrame:NSMakeRect(0, 0, indent, 10)]];
+            [groupRow addArrangedSubview:groupLabel];
+            [self.jsonEditorStack addArrangedSubview:groupRow];
+            
+            [groupRow.widthAnchor constraintEqualToAnchor:self.jsonEditorStack.widthAnchor].active = NO;
+            
+            [self createFieldsForJSON:obj prefix:fullKey indent:indent + 20];
+            
         } else {
-            NSTextField *valueField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth + 10 + indent, *currentY, fieldWidth, rowHeight)];
-            valueField.stringValue = [NSString stringWithFormat:@"%@", obj];
-            valueField.toolTip = [NSString stringWithFormat:@"%@: %@", fullKey, obj]; // ✅ 设置 value tooltip
-            [container addSubview:valueField];
-            self.jsonFieldMap[fullKey] = valueField;
-            *currentY -= (rowHeight + verticalSpacing);
+            NSStackView *row = [[NSStackView alloc] init];
+            row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+            
+            if (indent > 0) {
+                 [row addArrangedSubview:[[NSView alloc] initWithFrame:NSMakeRect(0, 0, indent, 10)]];
+            }
+            
+            NSTextField *keyLabel = [UIFactory labelWithText:key];
+            [keyLabel.widthAnchor constraintEqualToConstant:100].active = YES;
+            [row addArrangedSubview:keyLabel];
+            
+            NSTextField *valField = [[NSTextField alloc] init];
+            valField.stringValue = [NSString stringWithFormat:@"%@", obj];
+            valField.toolTip = fullKey;
+            [valField setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+            [row addArrangedSubview:valField];
+            
+            [self.jsonEditorStack addArrangedSubview:row];
+            self.jsonFieldMap[fullKey] = valField;
+            
+             [row.widthAnchor constraintEqualToAnchor:self.jsonEditorStack.widthAnchor].active = YES;
         }
     }];
 }
 
-
-#pragma mark - 保存 JSON
 - (void)saveJSONToFile {
-    // 1️⃣ 弹出输入框，默认文件名为 appName
     [self.view.window makeFirstResponder:nil];
-    NSString *defaultFileName = self.jsonFieldMap[@"appName"].stringValue ?: @"update";
     
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"请输入保存的 JSON 文件名"];
-    [alert addButtonWithTitle:@"Save"];
-    [alert addButtonWithTitle:@"Cancel"];
+    NSString *fileName = self.jsonFieldMap[@"appName"].stringValue ?: @"update";
     
-    NSTextField *inputField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
-    inputField.stringValue = defaultFileName;
-    [alert setAccessoryView:inputField];
-    
-    NSModalResponse response = [alert runModal];
-    if (response != NSAlertFirstButtonReturn) {
-        return; // 用户取消
+    NSMutableDictionary *flatJSON = [NSMutableDictionary dictionary];
+    for (NSString *key in self.jsonFieldMap) {
+        flatJSON[key] = self.jsonFieldMap[key].stringValue;
     }
     
-    NSString *fileName = inputField.stringValue;
-    if (fileName.length == 0) fileName = @"update";
+    NSDictionary *nested = [self reconstructNestedDictionaryFromFlat:flatJSON];
     
-    // 2️⃣ 原来的保存逻辑
-    NSMutableDictionary *flatJSON = [NSMutableDictionary dictionary];
-    [self.jsonFieldMap enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSTextField *field, BOOL *stop) {
-        flatJSON[key] = field.stringValue ?: @"";
-    }];
+    // 使用局部变量接收 error，解决 Write-back 错误
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:nested options:NSJSONWritingPrettyPrinted error:&error];
     
-    NSDictionary *nestedJSON = [self reconstructNestedDictionaryFromFlat:flatJSON];
-    
-    NSError *error;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:nestedJSON options:NSJSONWritingPrettyPrinted error:&error];
     if (error) {
-        NSLog(@"❌ JSON 序列化失败: %@", error);
+        [AlertPresenter showError:[NSString stringWithFormat:@"Serialization Failed: %@", error.localizedDescription] inWindow:self.view.window];
         return;
     }
     
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:outputDir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *path = [self.jsonPath stringByDeletingLastPathComponent];
+    NSString *fullPath = [path stringByAppendingPathComponent:[fileName stringByAppendingPathExtension:@"json"]];
     
-    NSString *filePath = [outputDir stringByAppendingPathComponent:[fileName stringByAppendingPathExtension:@"json"]];
-    BOOL success = [data writeToFile:filePath atomically:YES];
-    
-    if (success) {
-        NSLog(@"✅ JSON 已保存到 %@", filePath);
-        // 弹出成功提示
-        NSAlert *successAlert = [[NSAlert alloc] init];
-        successAlert.messageText = @"✅ 保存成功";
-        successAlert.informativeText = [NSString stringWithFormat:@"JSON 文件已保存到 %@", filePath];
-        [successAlert addButtonWithTitle:@"OK"];
-        [successAlert runModal];
-        
-        // 刷新 UI，加载刚保存的 JSON
-        [self loadJSONFromFileAtPath:filePath];
-        
+    if ([data writeToFile:fullPath atomically:YES]) {
+        [AlertPresenter showSuccess:[NSString stringWithFormat:@"Saved to %@", fullPath] inWindow:self.view.window];
+        [self loadJSONFromFileAtPath:fullPath];
     } else {
-        NSLog(@"❌ JSON 写入失败");
+        [AlertPresenter showError:@"Save to Disk Failed" inWindow:self.view.window];
     }
 }
 
-// 将 flat JSON（key 可能是 parent.child）还原成嵌套字典
 - (NSDictionary *)reconstructNestedDictionaryFromFlat:(NSDictionary *)flatDict {
     NSMutableDictionary *nested = [NSMutableDictionary dictionary];
     for (NSString *flatKey in flatDict) {
@@ -349,290 +621,6 @@
     return nested;
 }
 
-
-
-#pragma mark - setupDir
-
-- (void)setupDir{
-    _outputDir  = [FileHelper generateSubdirectory:@"sparkle_output"];
-    _deltaDir   = [FileHelper fullPathInDocuments:@"sparkle_patch/update.delta"];
-    _logFileDir = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_log.txt"];
-    _jsonPath = [FileHelper fullPathInDocuments:@"sparkle_output/appVersion.json"];
-    
-    [FileHelper prepareEmptyFileAtPath:_deltaDir];
-    [FileHelper prepareEmptyFileAtPath:_logFileDir];
-    [FileHelper prepareEmptyFileAtPath:_jsonPath];
-     
-    [self logAllImportantPaths];
-    
-}
-
-- (NSDictionary *)setupAppSelectorWithLabel:(NSString *)labelText
-                                     action:(SEL)selector
-                                       x:(CGFloat)x
-                                       y:(CGFloat)y
-                                  labelWidth:(CGFloat)labelWidth
-                                  fieldWidth:(CGFloat)fieldWidth
-                                 buttonWidth:(CGFloat)buttonWidth {
-    
-    CGFloat height = 24;
-
-    // Label
-    NSTextField *label = [UIHelper createLabelWithText:labelText
-                                                 frame:NSMakeRect(x, y, labelWidth, height)];
-    [self.view addSubview:label];
-
-    // Path Field
-    NSTextField *field = [UIHelper createPathFieldWithFrame:NSMakeRect(x + labelWidth, y, fieldWidth, height)];
-    [self.view addSubview:field];
-
-    // Button
-    NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
-    NSButton *button = [UIHelper createButtonWithTitle:buttonTitle
-                                                target:self
-                                                action:selector
-                                                 frame:NSMakeRect(x + labelWidth + fieldWidth + 10, y - 3, buttonWidth, 30)];
-    [self.view addSubview:button];
-
-    return @{
-        @"label": label,
-        @"field": field,
-        @"button": button
-    };
-}
-
-- (void)setupGenerateButtonAtX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width spacing:(CGFloat)spacing {
-    // Generate Delta Button
-    self.generateUpdateButton = [UIHelper createButtonWithTitle:@"generate delta"
-                                                         target:self
-                                                         action:@selector(generateUpdate)
-                                                          frame:NSMakeRect(x, y, width, 30)];
-    [self.view addSubview:self.generateUpdateButton];
-
-    // Test Apply Delta Button
-    self.applyUpdateButton = [UIHelper createButtonWithTitle:@"test apply delta"
-                                                      target:self
-                                                      action:@selector(setUpApplyUpdateWindow)
-                                                       frame:NSMakeRect(x + width + spacing, y, width, 30)];
-    [self.view addSubview:self.applyUpdateButton];
-}
-
-#pragma mark - Button Actions
-- (void)selectOldApp {
-    
-    _oldAppDir = [self openAppFromSubdirectory:@"sparkleOldApp"];
-    
-    if (_oldAppDir) {
-        [self.oldAppPathField setStringValue:_oldAppDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose old App: %@", _oldAppDir]];
-        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_oldAppDir logBlock:^(NSString *msg) {
-            [self logMessage:msg]; // self 是 ViewController 实例
-        }];
-        if (versionInfo) {
-            _oldVersion = versionInfo[@"version"];
-            _oldBuildVersion = versionInfo[@"build"];
-            _appNameOld = versionInfo[@"appName"];
-            _appName = [FileHelper stripVersionFromAppName:_appNameOld];
-            [self logMessage:[NSString stringWithFormat:@"Old App:%@ Version: %@ (Build: %@)", _appNameOld, _oldVersion, _oldBuildVersion]];
-        }
-
-        
-    }
-}
-
-- (void)selectUpdatedApp {
-    _NewAppDir = [self openAppFromSubdirectory:@"sparkleNewApp"];
-    
-    if (_NewAppDir) {
-        [self.updatedAppPathField setStringValue:_NewAppDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", _NewAppDir]];
-        NSDictionary *versionInfo = [FileHelper getAppVersionInfoFromPath:_NewAppDir logBlock:^(NSString *msg) {
-            [self logMessage:msg]; // self 是 ViewController 实例
-        }];
-        if (versionInfo) {
-//            _appName = [_NewAppDir lastPathComponent];
-            _NewVersion = versionInfo[@"version"];
-            _NewBuildVersion = versionInfo[@"build"];
-            _appNameNew = versionInfo[@"appName"];
-            [self logMessage:[NSString stringWithFormat:@"New App:%@ Version: %@ (Build: %@)", _appNameNew, _NewVersion, _NewBuildVersion]];
-        }
-    }
-}
-
-- (NSString *)openAppFromSubdirectory:(NSString *)subDirName {
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
-
-    // 创建目录（如不存在）
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (![fileManager fileExistsAtPath:fullPath]) {
-        NSError *error = nil;
-        [fileManager createDirectoryAtPath:fullPath
-               withIntermediateDirectories:YES
-                                attributes:nil
-                                     error:&error];
-        if (error) {
-            NSLog(@"❌ Failed to create directory: %@", error.localizedDescription);
-            return nil;
-        }
-    }
-
-    // 使用封装的方法弹出文件选择面板
-    return [self selectAppFromDirectory:fullPath];
-}
-
-- (NSString *)selectAppFromDirectory:(NSString *)directoryPath {
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.canChooseFiles = YES;
-    panel.canChooseDirectories = NO;
-    panel.allowsMultipleSelection = NO;
-    panel.allowedContentTypes = @[ UTTypeApplicationBundle ];
-    panel.directoryURL = [NSURL fileURLWithPath:directoryPath];
-
-    if ([panel runModal] == NSModalResponseOK) {
-        return panel.URL.path;
-    }
-    return nil;
-}
-
-- (void)generateUpdate {
-    
-    [self logMessage:@"Begin generate delte.update"];
-    [self logAllImportantPaths];
-    if (_oldAppDir.length == 0 || _NewAppDir.length == 0) {
-        [self logMessage:@"❌ Choose old and new App Paths"];
-        return;
-    }
-    if (_deltaDir.length == 0) {
-        [self logMessage:@"❌ create ~/Documents/sparkle_patch first"];
-        return;
-    }
-    
-    
-    _deltaPath = [self promptForDeltaFilePathWithBaseDir:_deltaDir];
-    _appNameDeltaFileName = [_deltaPath lastPathComponent];  // 结果是 "OStation-1.6-1.7.delta"
-
-    
-    if (!_deltaPath) return;
-    [self logMessage:[NSString stringWithFormat:@"📄deltaPath: %@", _deltaPath]];
-    
-    
-    // Step 1: Generate Patch
-    BOOL success = [BinaryDeltaManager createDeltaFromOldPath:_oldAppDir
-                                               toNewPath:_NewAppDir
-                                                outputPath:_deltaPath
-                                                logBlock:^(NSString *log) {
-        [self logMessage:[NSString stringWithFormat:@"📄createDeltaLogs: %@", log]];
-    }];
-    
-    if (success) {
-        [self logMessage:@"✅ success create delta.update copy to _outputDir"];
-        
-        [FileHelper copyFileAtPath:_oldAppDir toDirectory:_outputDir]; //copy old app
-        [FileHelper copyFileAtPath:_NewAppDir toDirectory:_outputDir]; //copy new app
-        [FileHelper copyFileAtPath:_deltaPath toDirectory:_outputDir]; //copy delta app
-        [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
-                                     message:[NSString stringWithFormat:@"success create delta.update copy to %@", _deltaPath]];
-
-        NSString *baseURL = @"https://unigo.ai/uploads/";
-        NSString *appName = _appName;
-        NSString *lastVersion = _oldVersion;
-        NSString *latestVersion = _NewVersion;
-        NSString *jsonPath = [FileHelper replaceFileNameInPath:_jsonPath withNewName:appName];
-        NSLog(@"✅ New Path: %@", jsonPath);
-        NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@-%@.delta",
-                                   _appName, lastVersion, latestVersion];
-        NSString *deltaURL = [baseURL stringByAppendingString:deltaFileName];
-        NSString *downloadURL = [baseURL stringByAppendingString:
-                                 [NSString stringWithFormat:@"%@-%@.zip", _appName, latestVersion]];
-
-        
-        // 拼接文件路径
-        NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-        NSString *outputDir = [documentsPath stringByAppendingPathComponent:@"sparkle_output"];
-
-        NSString *deltaFilePath = [outputDir stringByAppendingPathComponent:deltaFileName];
-        NSString *appFilePath = [outputDir stringByAppendingPathComponent:
-                                 [NSString stringWithFormat:@"%@-%@.app", _appName, latestVersion]];
-        
-        // 计算大小（字节）
-        NSString *deltaSize = [FileHelper strfileSizeAtPath:deltaFilePath];
-
-        //dafault not used on Ostation
-        
-        NSString *wineVersion = @"10.0";
-        NSArray<NSString *> *preservePaths = @[@"steamapps", @"userdata", @"config"];
-
-        
-        __block NSString *zipfileSize = nil;
-        
-        // 先压缩，得到 zip 路径
-        [FileHelper zipAppAtPath:appFilePath logBlock:^(NSString *message) {
-            NSLog(@"%@", message);
-        } completion:^(NSString *zipFilePath) {
-            unsigned long long sizeInBytes = [FileHelper fileSizeAtPath:zipFilePath];
-            zipfileSize = [NSString stringWithFormat:@"%llu", sizeInBytes];
-            NSLog(@"zip 文件路径: %@", zipFilePath);
-            NSLog(@"zip in Block 文件大小: %@", zipfileSize);
-            // zip 完成后才开始产生json game zip 会比较久，建议制作等待icon
-            BOOL success = [self generateFullVersionJSONWithAppName:appName
-                                                      lastVersion:lastVersion
-                                                     latestVersion:latestVersion
-                                                     deltaFileName:deltaFileName
-                                                         deltaSize:deltaSize
-                                                        zipfileSize:zipfileSize
-                                                           deltaURL:deltaURL
-                                                       downloadURL:downloadURL
-                                                        wineVersion:wineVersion
-                                                      preservePaths:preservePaths
-                                                            jsonPath:jsonPath];
-
-            if (success) {
-                [self logMessage:@"✅ success create json file"];
-                [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
-                                             message:[NSString stringWithFormat:@"success create json file copy to %@", jsonPath]];
-                // 弹窗关闭后再加载 JSON
-                [self loadJSONFromFileAtPath:jsonPath]; //refesh json on UI
-                
-            } else {
-                [UIHelper showSuccessAlertWithTitle:@"❌ failed!"
-                                            message:@"failed to create json file"];
-                [self logMessage:@"❌ failed to create json file"];
-            }
-        }];
-
-    } else {
-        [UIHelper showSuccessAlertWithTitle:@"✅ failed!"
-                                    message:@"failed to create delta.update"];
-        [self logMessage:@"❌ failed to create delta.update"];
-    }
-}
-
-
-- (void)setUpApplyUpdateWindow {
-    // 用纯代码初始化控制器
-    AppUpdateViewController *vc = [[AppUpdateViewController alloc] init];
-
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 400)
-                                                   styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable)
-                                                     backing:NSBackingStoreBuffered
-                                                       defer:NO];
-    [window setTitle:@"Update"];
-    [window setContentViewController:vc];
-
-    NSWindowController *windowController = [[NSWindowController alloc] initWithWindow:window];
-
-    // 显示窗口
-    [windowController showWindow:self];
-    // ✅ 居中窗口
-    [window center];
-
-    // 保存引用防止释放
-    self.updateWindowController = windowController;
-
-}
-
-
 - (BOOL)generateFullVersionJSONWithAppName:(NSString *)appName
                                 lastVersion:(NSString *)lastVersion
                                latestVersion:(NSString *)latestVersion
@@ -644,173 +632,37 @@
                                      wineVersion:(NSString *)wineVersion
                                      preservePaths:(NSArray<NSString *> *)preservePaths
                                         jsonPath:(NSString *)jsonPath
-{
-    if (!appName) appName = @"UnknownApp";
-    if (!lastVersion) lastVersion = @"0.0.0";
-    if (!latestVersion) latestVersion = @"0.0.0";
-    if (!deltaFileName) deltaFileName = @"";
-    if (!deltaSize) deltaSize = @"0";
-    if (!zipfileSize) zipfileSize = @"0";
-    if (!deltaURL) deltaURL = @"";
-    if (!downloadURL) downloadURL = @"";
-    if (!wineVersion) wineVersion = @"";
-    if (!preservePaths) preservePaths = @[@"steamapps", @"userdata", @"config"];
-
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    formatter.dateFormat = @"yyyy-MM-dd";
-    NSString *releaseDate = [formatter stringFromDate:[NSDate date]];
-
-    // 将 preservePaths 转成字典格式，保持原来的数字键顺序
+                                           error:(NSError **)error {
+    
     NSMutableDictionary *preserveDict = [NSMutableDictionary dictionary];
     for (NSInteger i = 0; i < preservePaths.count; i++) {
         preserveDict[@(i).stringValue] = preservePaths[i];
     }
 
-    NSDictionary *wineConfig = @{
-        @"bottleName": appName,
-        @"wineVersion": wineVersion,
-        @"preservePaths": preserveDict
-    };
-
     NSDictionary *jsonDict = @{
-        @"appName": appName,
-        @"lastVersion": lastVersion,
-        @"latestVersion": latestVersion,
-        @"deltaFileName": deltaFileName,
-        @"deltaSize": deltaSize,
-        @"fileSize": zipfileSize,
-        @"deltaURL": deltaURL,
-        @"downloadURL": downloadURL,
-        @"releaseDate": releaseDate,
+        @"appName": appName ?: @"",
+        @"lastVersion": lastVersion ?: @"",
+        @"latestVersion": latestVersion ?: @"",
+        @"deltaFileName": deltaFileName ?: @"",
+        @"deltaSize": deltaSize ?: @"0",
+        @"fileSize": zipfileSize ?: @"0",
+        @"deltaURL": deltaURL ?: @"",
+        @"downloadURL": downloadURL ?: @"",
+        @"releaseDate": [[NSDate date] description],
         @"minimumSystemVersion": @"13.5",
         @"description": [NSString stringWithFormat:@"%@ client update", appName],
         @"signature": @"base64_encoded_signature",
-        @"wineConfig": wineConfig
+        @"wineConfig": @{
+            @"bottleName": appName ?: @"",
+            @"wineVersion": wineVersion ?: @"",
+            @"preservePaths": preserveDict
+        }
     };
-
-    NSError *error;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonDict
-                                                       options:NSJSONWritingPrettyPrinted
-                                                         error:&error];
-    if (error) {
-        NSLog(@"❌ Failed to serialize JSON: %@", error.localizedDescription);
-        return NO;
-    }
-
-    BOOL success = [jsonData writeToFile:jsonPath atomically:YES];
-    if (!success) {
-        NSLog(@"❌ Failed to write JSON to path: %@", jsonPath);
-        return NO;
-    }
-
-    NSLog(@"✅ JSON saved to: %@", jsonPath);
-    return YES;
-}
-
-//  a user interaction function . Its purpose is to display a prompt dialog that allows the user to input a delta file name and returns the full file path.
-
-- (NSString *)promptForDeltaFilePathWithBaseDir:(NSString *)baseDir
-{
-    // 创建输入框提示框
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Input appName of delta"];
-    [alert addButtonWithTitle:@"OK"];
-    [alert addButtonWithTitle:@"Cancel"];
     
-
-    // 添加一个文本输入框作为 accessoryView
-    NSTextField *inputField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:jsonDict options:NSJSONWritingPrettyPrinted error:error];
+    if (!data) return NO;
     
-    NSString *deltaFileName = [NSString stringWithFormat:@"%@-%@.delta",
-                               _appNameOld ?: @"UnknownApp",
-                               _NewVersion ?: @"0.0.0"];
-
-    [inputField setStringValue:deltaFileName]; // 默认值
-    [alert setAccessoryView:inputField];
-
-    // 弹出窗口并获取响应
-    NSModalResponse response = [alert runModal];
-    if (response == NSAlertFirstButtonReturn) {
-        NSString *fileName = inputField.stringValue;
-
-        // 简单合法性检查
-        if (fileName.length == 0) {
-            fileName = @"update.delta";
-        }
-        // 取 baseDir 的父目录（去掉旧文件名）
-        NSString *dir = [baseDir stringByDeletingLastPathComponent];
-        return [dir stringByAppendingPathComponent:fileName];
-        
-    } else {
-        // 用户取消输入，返回 nil
-        return nil;
-    }
+    return [data writeToFile:jsonPath atomically:YES];
 }
-
-
-- (void)logAllImportantPaths {
-    [self logMessage:[NSString stringWithFormat:@"outputDir: %@",  _outputDir]];
-    [self logMessage:[NSString stringWithFormat:@"deltaDir: %@",   _deltaDir]];
-    [self logMessage:[NSString stringWithFormat:@"logFileDir: %@", _logFileDir]];
-    [self logMessage:[NSString stringWithFormat:@"jsonPath: %@", _jsonPath]];
-    [self logMessage:[NSString stringWithFormat:@"📄 oldAppPath: %@", _oldAppDir]];
-    [self logMessage:[NSString stringWithFormat:@"🧩 newAppPath: %@", _NewAppDir]];
-}
-
-
-#pragma mark - 日志打印
-
-- (void)logMessage:(NSString *)message {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        // 1. 生成带时间戳的日志
-        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-        [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
-        NSString *timestamp = [formatter stringFromDate:[NSDate date]];
-        NSString *timestampedMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
-
-        // 2. 更新 UI 显示
-        NSString *existingText = self.logTextView.string ?: @"";
-        NSString *updatedText = [existingText stringByAppendingString:timestampedMessage];
-        [self.logTextView setString:updatedText];
-
-        NSRange bottom = NSMakeRange(updatedText.length, 0);
-        [self.logTextView scrollRangeToVisible:bottom];
-
-
-        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:self->_logFileDir];
-        if (!fileHandle) {
-            // 文件不存在则创建
-            [[NSFileManager defaultManager] createFileAtPath:self->_logFileDir contents:nil attributes:nil];
-            fileHandle = [NSFileHandle fileHandleForWritingAtPath:self->_logFileDir];
-        }
-
-        if (fileHandle) {
-            [fileHandle seekToEndOfFile];
-            NSData *logData = [timestampedMessage dataUsingEncoding:NSUTF8StringEncoding];
-            [fileHandle writeData:logData];
-            [fileHandle closeFile];
-        }
-    });
-}
-
-- (void)showErrorAndExit {
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"❌ Required file missing";
-    alert.informativeText = @"BinaryDelta was not found. The application will now close.";
-    [alert addButtonWithTitle:@"Exit"];
-    [alert runModal];
-    
-    [NSApp terminate:nil];
-}
-
-
-// 传入文件路径，返回文件大小（字节数，NSString 类型）
-- (NSString *)fileSizeForPath:(NSString *)filePath {
-    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
-    unsigned long long fileSize = [attrs fileSize]; // 字节数
-    return [NSString stringWithFormat:@"%llu", fileSize];
-}
-
-
 
 @end
