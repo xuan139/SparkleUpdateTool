@@ -2,11 +2,10 @@
 //  ViewController.h
 //  SparkleUpdateTool
 //
-//  Refactored: Phase 1 (UI Component Extraction)
+//  Refactored Phase 2: Fully Decoupled Service Layer
 //
 
 #import <Cocoa/Cocoa.h>
-// [删除] #import "SmartLogView.h" (建议移到 .m 文件引入，保持头文件干净)
 
 @interface ViewController : NSViewController
 
@@ -19,35 +18,21 @@
 @property (nonatomic, strong) NSButton *generateUpdateButton;
 @property (nonatomic, strong) NSButton *applyUpdateButton;
 
-// [修改] 日志视图改为在该文件内部引入类，或者使用 id，这里保留原样
-@property (nonatomic, strong) NSView *logView; // 类型可以是 SmartLogView，为了编译通过先写父类或在.m强转
+// 日志视图 (使用 id 或父类引用，保持解耦)
+@property (nonatomic, strong) NSView *logView;
 
-// [删除] 以下属性已不再需要，被组件接管
-// @property (nonatomic, strong) NSStackView *jsonEditorStack;
-// @property (nonatomic, strong) NSMutableDictionary<NSString *, NSTextField *> *jsonFieldMap;
-// @property (nonatomic, strong) NSDictionary *currentJSON;
-
-// --- 业务数据属性 (保持不变) ---
-@property (nonatomic, strong) NSString *appName;
-@property (nonatomic, strong) NSString *appNameOld;
-@property (nonatomic, strong) NSString *appNameNew;
-@property (nonatomic, strong) NSString *appNameDeltaFileName;
-
-@property (nonatomic, strong) NSString *oldVersion;
-@property (nonatomic, strong) NSString *oldBuildVersion;
-@property (nonatomic, strong) NSString *NewVersion;
-@property (nonatomic, strong) NSString *NewBuildVersion;
-
-@property (nonatomic, strong) NSString *docsDir;
+// --- 状态与配置 ---
+// 我们不再需要在 VC 里存几十个版本号变量，只存路径即可
 @property (nonatomic, strong) NSString *oldAppDir;
-@property (nonatomic, strong) NSString *NewAppDir;
+@property (nonatomic, strong) NSString *latestAppDir; // [改名] NewAppDir -> latestAppDir
 
-@property (nonatomic, strong) NSString *deltaDir;
-@property (nonatomic, strong) NSString *deltaPath;
+// 基础目录配置
 @property (nonatomic, strong) NSString *outputDir;
+@property (nonatomic, strong) NSString *deltaDir;     // 默认 Delta 存放目录
 @property (nonatomic, strong) NSString *logFileDir;
-@property (nonatomic, strong) NSString *jsonPath;
+@property (nonatomic, strong) NSString *jsonPath;     // 最终 JSON 路径
 
+// 子窗口控制器
 @property (nonatomic, strong) NSWindowController *updateWindowController;
 
 @end

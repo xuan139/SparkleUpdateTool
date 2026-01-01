@@ -5,14 +5,15 @@
 //  Created by lijiaxi on 7/20/25.
 //
 
-
 #import "FileHelper.h"
 
 @implementation FileHelper
 
+#pragma mark - Path & Name Utilities
 
-// 替换文件路径的文件名，保留原扩展名
 + (NSString *)replaceFileNameInPath:(NSString *)originalPath withNewName:(NSString *)newBaseName {
+    if (!originalPath.length || !newBaseName.length) return nil;
+    
     NSString *directory = [originalPath stringByDeletingLastPathComponent];
     NSString *ext = [originalPath pathExtension];
     NSString *newFileName = [NSString stringWithFormat:@"%@.%@", newBaseName, ext];
@@ -20,153 +21,20 @@
 }
 
 + (NSString *)stripVersionFromAppName:(NSString *)appName {
+    if (!appName.length) return nil;
+    
     NSError *error = nil;
-    // 匹配以 `-数字.数字` 结尾的部分（例如：-1.6、-1.6.0 等）
+    // 匹配结尾的 "-数字.数字..."
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"-\\d+(\\.\\d+)*$" options:0 error:&error];
     if (error) {
-        NSLog(@"Regex error: %@", error.localizedDescription);
+        NSLog(@"[FileHelper] Regex Error: %@", error.localizedDescription);
         return appName;
     }
-    NSRange range = NSMakeRange(0, appName.length);
-    return [regex stringByReplacingMatchesInString:appName options:0 range:range withTemplate:@""];
+    return [regex stringByReplacingMatchesInString:appName options:0 range:NSMakeRange(0, appName.length) withTemplate:@""];
 }
-
-
-
-+ (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
-                                   logBlock:(void (^)(NSString *msg))logBlock {
-    NSString *infoPlistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
-    NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfFile:infoPlistPath];
-
-    if (!infoPlist) {
-        if (logBlock) {
-            logBlock([NSString stringWithFormat:@"❌ cannot read Info.plist: %@", infoPlistPath]);
-        }
-        return nil;
-    }
-
-    logBlock([NSString stringWithFormat:@"✅read Info.plist: %@", infoPlistPath]);
-
-    NSString *version = infoPlist[@"CFBundleShortVersionString"] ?: @"";
-    NSString *build = infoPlist[@"CFBundleVersion"] ?: @"";
-    NSString *appName = infoPlist[@"CFBundleName"] ?: infoPlist[@"CFBundleExecutable"] ?: @"Unknown";
-
-    return @{
-        @"appName": appName,
-        @"version": version,
-        @"build": build
-    };
-}
-
-+ (NSString *)strfileSizeAtPath:(NSString *)filePath {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSError *error;
-    NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:&error];
-    
-    if (!attributes) {
-        NSLog(@"获取文件大小失败: %@ - %@", filePath, error.localizedDescription);
-        return @"0";
-    }
-
-    unsigned long long totalSize = 0;
-
-    // 检查是否为文件夹（如 .app 包）
-    if ([attributes[NSFileType] isEqualToString:NSFileTypeDirectory]) {
-        NSDirectoryEnumerator *enumerator = [fileManager enumeratorAtURL:[NSURL fileURLWithPath:filePath]
-                                              includingPropertiesForKeys:@[NSURLTotalFileSizeKey]
-                                                                 options:NSDirectoryEnumerationSkipsHiddenFiles
-                                                            errorHandler:nil];
-        for (NSURL *url in enumerator) {
-            NSNumber *fileSize;
-            [url getResourceValue:&fileSize forKey:NSURLTotalFileSizeKey error:nil];
-            totalSize += fileSize.unsignedLongLongValue;
-        }
-    } else {
-        totalSize = [attributes[NSFileSize] unsignedLongLongValue];
-    }
-
-    // 转成 NSString
-    return [NSString stringWithFormat:@"%llu", totalSize];
-}
-
-
-+ (unsigned long long)fileSizeAtPath:(NSString *)filePath {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSError *error;
-    NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:&error];
-    
-    if (!attributes) {
-        NSLog(@"获取文件大小失败: %@ - %@", filePath, error.localizedDescription);
-        return 0;
-    }
-
-    // 检查是否为文件夹（如 .app 包）
-    if ([attributes[NSFileType] isEqualToString:NSFileTypeDirectory]) {
-        unsigned long long totalSize = 0;
-        NSDirectoryEnumerator *enumerator = [fileManager enumeratorAtURL:[NSURL fileURLWithPath:filePath]
-                                              includingPropertiesForKeys:@[NSURLTotalFileSizeKey]
-                                                                 options:NSDirectoryEnumerationSkipsHiddenFiles
-                                                            errorHandler:nil];
-        for (NSURL *url in enumerator) {
-            NSNumber *fileSize;
-            [url getResourceValue:&fileSize forKey:NSURLTotalFileSizeKey error:nil];
-            totalSize += fileSize.unsignedLongLongValue;
-        }
-        return totalSize;
-    }
-    
-    return [attributes[NSFileSize] unsignedLongLongValue];
-}
-
 
 + (NSString *)firstAppFileNameInPath:(NSString *)directoryPath {
-    // 获取文件管理器
-
-    // 提取并返回文件名
     return [directoryPath lastPathComponent];
-}
-
-
-
-+ (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    // 获取文件名（不含路径）
-    NSString *fileName = [sourceFilePath lastPathComponent];
-    NSString *targetPath = [targetDir stringByAppendingPathComponent:fileName];
-    
-    // 如果目标文件存在，先删除
-    if ([fileManager fileExistsAtPath:targetPath]) {
-        [fileManager removeItemAtPath:targetPath error:nil];
-    }
-    
-    NSError *copyError = nil;
-    [fileManager copyItemAtPath:sourceFilePath toPath:targetPath error:&copyError];
-    if (copyError) {
-        NSLog(@"❌ 复制文件失败 %@ -> %@ 错误: %@", sourceFilePath, targetPath, copyError.localizedDescription);
-    } else {
-        NSLog(@"✅ 复制文件 %@ 到 %@", sourceFilePath, targetPath);
-    }
-}
-
-+ (NSString *)generateSubdirectory:(NSString *)subDirName {
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
-
-    // 如果目录不存在则创建
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (![fileManager fileExistsAtPath:fullPath]) {
-        NSError *error = nil;
-        [fileManager createDirectoryAtPath:fullPath
-               withIntermediateDirectories:YES
-                                attributes:nil
-                                     error:&error];
-        if (error) {
-            NSLog(@"❌ 创建目录失败: %@", error.localizedDescription);
-            return nil;
-        }
-    }
-    return fullPath;
 }
 
 + (NSString *)fullPathInDocuments:(NSString *)relativePath {
@@ -174,176 +42,208 @@
     return [docsDir stringByAppendingPathComponent:relativePath];
 }
 
+#pragma mark - Directory Management
+
++ (NSString *)generateSubdirectory:(NSString *)subDirName {
+    NSString *fullPath = [self fullPathInDocuments:subDirName];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    
+    if (![fm fileExistsAtPath:fullPath]) {
+        NSError *error = nil;
+        if (![fm createDirectoryAtPath:fullPath withIntermediateDirectories:YES attributes:nil error:&error]) {
+            NSLog(@"[FileHelper] ❌ Failed to create dir: %@", error.localizedDescription);
+            return nil;
+        }
+    }
+    return fullPath;
+}
 
 + (NSString *)createDirectoryIfNeededAtPath:(NSString *)directoryPath
                                       error:(NSError **)error
-                                   logBlock:(void (^)(NSString *log))logBlock {
+                                   logBlock:(void (^)(NSString *))logBlock {
     NSFileManager *fm = [NSFileManager defaultManager];
     BOOL isDir = NO;
-
-    BOOL exists = [fm fileExistsAtPath:directoryPath isDirectory:&isDir];
-
-    if (exists) {
+    if ([fm fileExistsAtPath:directoryPath isDirectory:&isDir]) {
         if (!isDir) {
-            // 已存在同名文件，删除它
+            // 存在同名文件，删除
             if (![fm removeItemAtPath:directoryPath error:error]) {
-                if (logBlock) logBlock([NSString stringWithFormat:@"❌ 删除已有同名文件失败: %@", (*error).localizedDescription]);
+                if (logBlock) logBlock([NSString stringWithFormat:@"❌ Failed to remove existing file: %@", (*error).localizedDescription]);
                 return nil;
             }
-            if (logBlock) logBlock(@"⚠️ 已存在同名文件，已删除");
+            if (logBlock) logBlock(@"⚠️ Removed existing file with same name.");
         } else {
-            if (logBlock) logBlock([NSString stringWithFormat:@"✅ 目录已存在: %@", directoryPath]);
+            if (logBlock) logBlock([NSString stringWithFormat:@"✅ Directory already exists: %@", directoryPath]);
             return directoryPath;
         }
     }
 
-    // 创建目录
-    BOOL success = [fm createDirectoryAtPath:directoryPath
-                  withIntermediateDirectories:YES
-                                   attributes:nil
-                                        error:error];
-    if (success) {
-        if (logBlock) logBlock([NSString stringWithFormat:@"✅ 创建目录成功: %@", directoryPath]);
+    if ([fm createDirectoryAtPath:directoryPath withIntermediateDirectories:YES attributes:nil error:error]) {
+        if (logBlock) logBlock([NSString stringWithFormat:@"✅ Created directory: %@", directoryPath]);
         return directoryPath;
     } else {
-        if (logBlock) logBlock([NSString stringWithFormat:@"❌ 创建目录失败: %@", (*error).localizedDescription]);
+        if (logBlock) logBlock([NSString stringWithFormat:@"❌ Failed to create directory: %@", (*error).localizedDescription]);
         return nil;
     }
 }
 
+#pragma mark - File Operations
 
-+ (BOOL)prepareEmptyFileAtPath:(NSString *)filePath {
++ (void)copyFileAtPath:(NSString *)sourceFilePath toDirectory:(NSString *)targetDir {
+    if (!sourceFilePath || !targetDir) return;
+
     NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *fileName = [sourceFilePath lastPathComponent];
+    NSString *targetPath = [targetDir stringByAppendingPathComponent:fileName];
     
-    // 获取目录部分
-    NSString *directory = [filePath stringByDeletingLastPathComponent];
-    
-    // 创建目录（如果不存在）
-    if (![fm fileExistsAtPath:directory]) {
-        NSError *dirError = nil;
-        BOOL createdDir = [fm createDirectoryAtPath:directory
-                         withIntermediateDirectories:YES
-                                          attributes:nil
-                                               error:&dirError];
-        if (!createdDir) {
-            NSLog(@"❌ Failed to create directory: %@", dirError);
-            return NO;
-        }
+    // 如果存在先删除
+    if ([fm fileExistsAtPath:targetPath]) {
+        [fm removeItemAtPath:targetPath error:nil];
     }
     
-    // 删除旧文件（如果存在）
+    NSError *error = nil;
+    if ([fm copyItemAtPath:sourceFilePath toPath:targetPath error:&error]) {
+        NSLog(@"[FileHelper] ✅ Copied %@ to %@", fileName, targetDir);
+    } else {
+        NSLog(@"[FileHelper] ❌ Copy failed: %@", error.localizedDescription);
+    }
+}
+
++ (BOOL)prepareEmptyFileAtPath:(NSString *)filePath {
+    if (!filePath.length) return NO;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    
+    // 确保父目录存在
+    NSString *directory = [filePath stringByDeletingLastPathComponent];
+    if (![fm fileExistsAtPath:directory]) {
+        [fm createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    
+    // 删除旧文件
     if ([fm fileExistsAtPath:filePath]) {
-        NSError *removeError = nil;
-        if (![fm removeItemAtPath:filePath error:&removeError]) {
-            NSLog(@"❌ Failed to remove old file: %@", removeError);
-            return NO;
-        }
+        [fm removeItemAtPath:filePath error:nil];
     }
 
     // 创建空文件
-    BOOL created = [fm createFileAtPath:filePath contents:[NSData data] attributes:nil];
-    if (!created) {
-        NSLog(@"❌ Failed to create file at path: %@", filePath);
-    }
-    return created;
+    return [fm createFileAtPath:filePath contents:[NSData data] attributes:nil];
 }
-
 
 + (BOOL)copyAllFilesFromDirectory:(NSString *)sourceDir toDirectory:(NSString *)destDir error:(NSError **)error {
     NSFileManager *fm = [NSFileManager defaultManager];
     
-    // 确保目标目录存在
     if (![fm fileExistsAtPath:destDir]) {
-        BOOL created = [fm createDirectoryAtPath:destDir withIntermediateDirectories:YES attributes:nil error:error];
-        if (!created) return NO;
+        if (![fm createDirectoryAtPath:destDir withIntermediateDirectories:YES attributes:nil error:error]) return NO;
     }
     
-    NSArray<NSString *> *files = [fm contentsOfDirectoryAtPath:sourceDir error:error];
+    NSArray *files = [fm contentsOfDirectoryAtPath:sourceDir error:error];
     if (!files) return NO;
     
     for (NSString *fileName in files) {
-        NSString *srcPath = [sourceDir stringByAppendingPathComponent:fileName];
-        NSString *dstPath = [destDir stringByAppendingPathComponent:fileName];
+        // 跳过 .DS_Store
+        if ([fileName isEqualToString:@".DS_Store"]) continue;
+
+        NSString *src = [sourceDir stringByAppendingPathComponent:fileName];
+        NSString *dst = [destDir stringByAppendingPathComponent:fileName];
         
-        // 如果目标文件已存在，先删除
-        if ([fm fileExistsAtPath:dstPath]) {
-            BOOL removed = [fm removeItemAtPath:dstPath error:error];
-            if (!removed) return NO;
+        if ([fm fileExistsAtPath:dst]) {
+            [fm removeItemAtPath:dst error:nil];
         }
         
-        BOOL copied = [fm copyItemAtPath:srcPath toPath:dstPath error:error];
-        if (!copied) return NO;
+        if (![fm copyItemAtPath:src toPath:dst error:error]) return NO;
     }
-    
     return YES;
 }
 
+#pragma mark - App Info & Size
 
-+ (void)zipAppAtPath:(NSString *)appPath
-           logBlock:(void (^)(NSString *message))logBlock
-       completion:(void (^)(NSString *zipFilePath))completion
-{
-    NSString *outputDir = [appPath stringByDeletingLastPathComponent];
-    NSString *zipFilePath = [outputDir stringByAppendingPathComponent:
-                             [NSString stringWithFormat:@"%@.zip", [appPath lastPathComponent]]];
++ (NSDictionary *)getAppVersionInfoFromPath:(NSString *)appPath
+                                   logBlock:(void (^)(NSString *))logBlock {
+    if (!appPath) return nil;
 
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        // 压缩逻辑
-        NSTask *zipTask = [[NSTask alloc] init];
-        zipTask.launchPath = @"/usr/bin/zip";
-        zipTask.arguments = @[@"-r", zipFilePath, appPath.lastPathComponent];
-        zipTask.currentDirectoryPath = outputDir;
-        [zipTask launch];
-        [zipTask waitUntilExit];
+    NSString *plistPath = [appPath stringByAppendingPathComponent:@"Contents/Info.plist"];
+    NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:plistPath];
 
-        if (logBlock) logBlock([NSString stringWithFormat:@"📦 压缩完成: %@", zipFilePath]);
-        if (completion) completion(zipFilePath);
-    });
-}
-
-
-+ (NSString *)zipAppAtPath:(NSString *)appPath logBlock:(void (^)(NSString *message))logBlock {
-    if (![[NSFileManager defaultManager] fileExistsAtPath:appPath]) {
-        logBlock(@"❌ 要压缩的 .app 文件不存在");
+    if (!info) {
+        if (logBlock) logBlock([NSString stringWithFormat:@"❌ Cannot read Info.plist at %@", plistPath]);
         return nil;
     }
 
-    NSString *appName = [[appPath lastPathComponent] stringByDeletingPathExtension];
-    NSString *appDirectory = [appPath stringByDeletingLastPathComponent];
-    NSString *zipPath = [appDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", appName]];
+    if (logBlock) logBlock([NSString stringWithFormat:@"✅ Read Info.plist: %@", plistPath]);
 
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/zip";
-    task.currentDirectoryPath = appDirectory;
-    task.arguments = @[@"-r", zipPath, [appPath lastPathComponent]];
-
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = pipe;
-    NSFileHandle *readHandle = [pipe fileHandleForReading];
-
-    logBlock([NSString stringWithFormat:@"📦 开始压缩 %@ → %@", appPath, zipPath]);
-
-    task.terminationHandler = ^(NSTask *finishedTask) {
-        NSData *outputData = [readHandle readDataToEndOfFile];
-        NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            // 可选：打印 zip 命令输出
-            // logBlock(output);
-
-            if (finishedTask.terminationStatus == 0) {
-                logBlock(@"✅ 压缩完成");
-            } else {
-                logBlock(@"❌ 压缩失败");
-            }
-        });
+    return @{
+        @"appName": info[@"CFBundleName"] ?: info[@"CFBundleExecutable"] ?: @"Unknown",
+        @"version": info[@"CFBundleShortVersionString"] ?: @"",
+        @"build": info[@"CFBundleVersion"] ?: @""
     };
+}
 
-    [task launch];
++ (NSString *)strfileSizeAtPath:(NSString *)filePath {
+    // 复用逻辑
+    return [NSString stringWithFormat:@"%llu", [self fileSizeAtPath:filePath]];
+}
 
-    return zipPath;
++ (unsigned long long)fileSizeAtPath:(NSString *)filePath {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    BOOL isDir = NO;
+    if (![fm fileExistsAtPath:filePath isDirectory:&isDir]) return 0;
+    
+    if (!isDir) {
+        return [[fm attributesOfItemAtPath:filePath error:nil] fileSize];
+    }
+    
+    // 文件夹递归计算
+    unsigned long long total = 0;
+    NSDirectoryEnumerator *enumerator = [fm enumeratorAtURL:[NSURL fileURLWithPath:filePath]
+                                 includingPropertiesForKeys:@[NSURLTotalFileSizeKey]
+                                                    options:NSDirectoryEnumerationSkipsHiddenFiles
+                                               errorHandler:nil];
+    for (NSURL *url in enumerator) {
+        NSNumber *size = nil;
+        [url getResourceValue:&size forKey:NSURLTotalFileSizeKey error:nil];
+        total += size.unsignedLongLongValue;
+    }
+    return total;
+}
+
+#pragma mark - Compression
+
++ (void)zipAppAtPath:(NSString *)appPath
+            logBlock:(void (^)(NSString *))logBlock
+          completion:(void (^)(NSString *))completion {
+    
+    if (!appPath.length) {
+        if (logBlock) logBlock(@"❌ Zip failed: Path is empty.");
+        if (completion) completion(nil);
+        return;
+    }
+    
+    NSString *dir = [appPath stringByDeletingLastPathComponent];
+    NSString *name = [appPath lastPathComponent];
+    NSString *zipPath = [dir stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", name]];
+    
+    // 使用全局队列异步执行
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSTask *task = [[NSTask alloc] init];
+        task.launchPath = @"/usr/bin/zip";
+        // -r 递归, -y 保留符号链接 (对 .app 很重要), -q 静默模式
+        task.arguments = @[@"-r", @"-y", @"-q", zipPath, name];
+        task.currentDirectoryPath = dir;
+        
+        @try {
+            [task launch];
+            [task waitUntilExit];
+            
+            if (task.terminationStatus == 0) {
+                if (logBlock) logBlock([NSString stringWithFormat:@"📦 Zip created: %@", zipPath]);
+                if (completion) completion(zipPath);
+            } else {
+                if (logBlock) logBlock([NSString stringWithFormat:@"❌ Zip command failed with code: %d", task.terminationStatus]);
+                if (completion) completion(nil);
+            }
+        } @catch (NSException *e) {
+            if (logBlock) logBlock([NSString stringWithFormat:@"❌ Zip exception: %@", e]);
+            if (completion) completion(nil);
+        }
+    });
 }
 
 @end
-
