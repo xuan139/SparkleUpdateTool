@@ -3,269 +3,279 @@
 //  SparkleUpdateTool
 //
 //  Created by lijiaxi on 7/26/25.
+//  Refactored: Fixed naming conventions, selector mismatches, and implemented Auto Layout.
 //
 
-
-#import <Foundation/Foundation.h>
 #import "AppUpdateViewController.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-#import "UIHelper.h"
+
+// 引入工具类
+#import "FileHelper.h"
+#import "UIFactory.h"
+#import "AlertPresenter.h"
+#import "SmartLogView.h"
 #import "BinaryDeltaManager.h"
+
+@interface AppUpdateViewController ()
+
+// --- UI 属性 (私有) ---
+@property (nonatomic, strong) NSTextField *oldAppPathField;
+@property (nonatomic, strong) NSTextField *deltaPathField;
+
+// [修复] 重命名 newAppNameField -> outputAppNameField 以避免 "new" 命名冲突
+@property (nonatomic, strong) NSTextField *outputAppNameField;
+
+@property (nonatomic, strong) NSButton *okButton;
+@property (nonatomic, strong) SmartLogView *logView;
+
+// --- 数据属性 ---
+@property (nonatomic, strong) NSString *oldAppDir;
+@property (nonatomic, strong) NSString *deltaDir;
+@property (nonatomic, strong) NSString *logFilePath;
+
+@end
 
 @implementation AppUpdateViewController
 
+#pragma mark - Lifecycle
+
 - (void)loadView {
-    self.view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 700, 500)];
+    // 设置初始视图大小
+    NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 550)];
+    self.view = view;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    [self setupUI];
-    [self setupDir];
+    [self setupPaths];
+    [self setupLayout];
 }
 
-#pragma mark - setupUI
-- (void)setupUI {
-    CGFloat baseY = 440;
-    CGFloat spacingY = 50;
-    //  App 选择
-    [self setupFileSelectorWithLabel:@"App:" action:@selector(selectOldApp) yPosition:baseY isOldApp:YES];
-    // Delta 文件选择
-    [self setupFileSelectorWithLabel:@"Delta:" action:@selector(selectDeltaFile) yPosition:baseY - spacingY isOldApp:NO];
-    // 新版 App 文件名输入
-    [self setupNewAppNameFieldAtY:baseY - spacingY * 2];
-    // OK 和 Cancel 按钮
-    [self setupButtonsAtY:baseY - spacingY * 3];
-    // 日志视图
-    NSTextView *logTextView;
-    NSScrollView *logScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 20, 600, 250)];
-    logTextView = [[NSTextView alloc] initWithFrame:logScrollView.bounds];
-    logScrollView.documentView = logTextView;
-    logScrollView.hasVerticalScroller = YES;
-    logTextView.editable = NO;
-    logTextView.font = [NSFont systemFontOfSize:14];
-    self.logTextView = logTextView;
-    [self.view addSubview:logScrollView];
+#pragma mark - Setup
+
+- (void)setupPaths {
+    // 设置日志路径
+    self.logFilePath = [FileHelper fullPathInDocuments:@"sparkleLogDir/sparkle_apply_log.txt"];
+    [FileHelper prepareEmptyFileAtPath:self.logFilePath];
+}
+
+- (void)setupLayout {
+    // 1. 主容器 (Vertical StackView)
+    NSStackView *mainStack = [[NSStackView alloc] init];
+    mainStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    mainStack.alignment = NSLayoutAttributeLeading;
+    mainStack.spacing = 20;
+    mainStack.edgeInsets = NSEdgeInsetsMake(30, 30, 30, 30);
+    mainStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:mainStack];
+
+    // Auto Layout 约束：撑满窗口
+    [NSLayoutConstraint activateConstraints:@[
+        [mainStack.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [mainStack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [mainStack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [mainStack.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ]];
+
+    // 2. 组装 UI 组件
     
-    [self logMessage:@"logging ..."];
-}
+    // Row 1: 旧 App 选择
+    // [修复] 使用临时变量 tempOldField 解决 "non-local object" 错误
+    NSTextField *tempOldField = nil;
+    [mainStack addArrangedSubview:[self createPathSelectionRow:@"Old App:"
+                                                 placeholder:@"Select old .app..."
+                                                   targetPtr:&tempOldField
+                                                      action:@selector(selectOldApp)]];
+    self.oldAppPathField = tempOldField; // 赋值给属性
 
-#pragma mark - setupDir
-- (void)setupDir {
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    self.logFileDir = [documentsPath stringByAppendingPathComponent:@"sparkleLogDir/sparkle_log.txt"];
+    // Row 2: Delta 文件选择
+    // [修复] 使用临时变量 tempDeltaField
+    NSTextField *tempDeltaField = nil;
+    [mainStack addArrangedSubview:[self createPathSelectionRow:@"Delta File:"
+                                                 placeholder:@"Select .delta file..."
+                                                   targetPtr:&tempDeltaField
+                                                      action:@selector(selectDeltaFile)]];
+    self.deltaPathField = tempDeltaField; // 赋值给属性
+
+    // Row 3: 新文件名输入
+    // [修复] 使用临时变量 tempNameField
+    NSTextField *tempNameField = nil;
+    [mainStack addArrangedSubview:[self createInputFieldRow:@"New Name:"
+                                              placeholder:@"e.g. MyApp_v2.0.app"
+                                                targetPtr:&tempNameField]];
+    self.outputAppNameField = tempNameField; // 赋值给属性
+
+    // Row 4: 按钮区域
+    NSStackView *buttonStack = [[NSStackView alloc] init];
+    buttonStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    buttonStack.spacing = 12;
     
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSString *logDir = [self.logFileDir stringByDeletingLastPathComponent];
-    if (![fileManager fileExistsAtPath:logDir]) {
-        [fileManager createDirectoryAtPath:logDir withIntermediateDirectories:YES attributes:nil error:nil];
-    }
-    if (![fileManager fileExistsAtPath:self.logFileDir]) {
-        [fileManager createFileAtPath:self.logFileDir contents:nil attributes:nil];
-    }
+    self.okButton = [UIFactory primaryButtonWithTitle:@"Apply Update" target:self action:@selector(okButtonPressed)];
+    NSButton *cancelBtn = [UIFactory buttonWithTitle:@"Cancel" target:self action:@selector(cancelButtonPressed)];
     
-    [self logMessage:[NSString stringWithFormat:@"log : %@", self.logFileDir]];
+    [buttonStack addArrangedSubview:self.okButton];
+    [buttonStack addArrangedSubview:cancelBtn];
+    [mainStack addArrangedSubview:buttonStack];
+
+    // Row 5: 日志区域
+    [mainStack addArrangedSubview:[UIFactory labelWithText:@"Execution Log:"]];
+    
+    self.logView = [[SmartLogView alloc] init];
+    [mainStack addArrangedSubview:self.logView];
+    
+    // 约束日志视图
+    [self.logView.widthAnchor constraintEqualToAnchor:mainStack.widthAnchor].active = YES;
+    [self.logView.heightAnchor constraintGreaterThanOrEqualToConstant:200].active = YES;
+    
+    [self log:@"Ready to apply delta." level:LogLevelInfo];
 }
 
-- (void)setupFileSelectorWithLabel:(NSString *)labelText action:(SEL)selector yPosition:(CGFloat)y isOldApp:(BOOL)isOldApp {
-    CGFloat padding = 20;
-    CGFloat labelWidth = 100;
-    CGFloat fieldWidth = 400;
-    CGFloat buttonWidth = 130;
-    CGFloat height = 24;
+#pragma mark - UI Helpers
 
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, labelWidth, height)];
-    label.stringValue = labelText;
-    label.editable = NO;
-    label.bordered = NO;
-    label.backgroundColor = [NSColor clearColor];
-    [self.view addSubview:label];
-
-    NSTextField *field = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
-    field.editable = NO;
-    [self.view addSubview:field];
-
-    NSString *buttonTitle = [NSString stringWithFormat:@"Choose %@", labelText];
-    NSButton *button = [[NSButton alloc] initWithFrame:NSMakeRect(padding + labelWidth + fieldWidth + 10, y - 5, buttonWidth, 30)];
-    button.title = buttonTitle;
-    button.target = self;
-    button.action = selector;
-    button.bezelStyle = NSBezelStyleRounded;
-    [self.view addSubview:button];
-
-    if (isOldApp) {
-        self.oldAppLabel = label;
-        self.oldAppPathField = field;
-        self.oldAppSelectButton = button;
-    } else {
-        self.deltaLabel = label;
-        self.deltaPathField = field;
-        self.deltaSelectButton = button;
-    }
+// [修复] 方法签名中第二个参数名为 placeholder，解决了 Selector Mismatch 错误
+- (NSView *)createPathSelectionRow:(NSString *)label placeholder:(NSString *)placeholder targetPtr:(NSTextField **)fieldPtr action:(SEL)sel {
+    NSStackView *row = [[NSStackView alloc] init];
+    row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    row.spacing = 10;
+    
+    NSTextField *lbl = [UIFactory labelWithText:label];
+    [lbl.widthAnchor constraintEqualToConstant:80].active = YES; // 固定 Label 宽度
+    
+    NSTextField *field = [UIFactory pathDisplayFieldWithPlaceholder:placeholder];
+    [field setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    
+    NSButton *btn = [UIFactory buttonWithTitle:@"Choose..." target:self action:sel];
+    
+    [row addArrangedSubview:lbl];
+    [row addArrangedSubview:field];
+    [row addArrangedSubview:btn];
+    
+    if (fieldPtr) *fieldPtr = field;
+    
+    // 确保 Row 宽度能够被拉伸
+    NSLayoutConstraint *widthCon = [row.widthAnchor constraintEqualToConstant:0];
+    widthCon.priority = NSLayoutPriorityFittingSizeCompression;
+    widthCon.active = YES;
+    
+    return row;
 }
 
-- (void)setupNewAppNameFieldAtY:(CGFloat)y {
-    CGFloat padding = 20;
-    CGFloat labelWidth = 100;
-    CGFloat fieldWidth = 400;
-    CGFloat height = 24;
-
-    self.NewAppNameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, y, labelWidth, height)];
-    self.NewAppNameLabel.stringValue = @"New App Name:";
-    self.NewAppNameLabel.editable = NO;
-    self.NewAppNameLabel.bordered = NO;
-    self.NewAppNameLabel.backgroundColor = [NSColor clearColor];
-    [self.view addSubview:self.NewAppNameLabel];
-
-    self.NewAppNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(padding + labelWidth, y, fieldWidth, height)];
-    self.NewAppNameField.placeholderString = @"Input New App name(ex: MyApp_V12.app)";
-    [self.view addSubview:self.NewAppNameField];
+- (NSView *)createInputFieldRow:(NSString *)label placeholder:(NSString *)placeholder targetPtr:(NSTextField **)fieldPtr {
+    NSStackView *row = [[NSStackView alloc] init];
+    row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    row.spacing = 10;
+    
+    NSTextField *lbl = [UIFactory labelWithText:label];
+    [lbl.widthAnchor constraintEqualToConstant:80].active = YES;
+    
+    NSTextField *field = [[NSTextField alloc] init];
+    field.placeholderString = placeholder;
+    [field setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    
+    [row addArrangedSubview:lbl];
+    [row addArrangedSubview:field];
+    
+    if (fieldPtr) *fieldPtr = field;
+    return row;
 }
 
-- (void)setupButtonsAtY:(CGFloat)y {
-    CGFloat padding = 20;
-    self.okButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding, y, 100, 30)];
-    self.okButton.title = @"OK";
-    self.okButton.bezelStyle = NSBezelStyleRounded;
-    self.okButton.target = self;
-    self.okButton.action = @selector(okButtonPressed);
-    [self.view addSubview:self.okButton];
+#pragma mark - Actions
 
-    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(padding + 120, y, 100, 30)];
-    self.cancelButton.title = @"Cancel";
-    self.cancelButton.bezelStyle = NSBezelStyleRounded;
-    self.cancelButton.target = self;
-    self.cancelButton.action = @selector(cancelButtonPressed);
-    [self.view addSubview:self.cancelButton];
-}
-
-#pragma mark - Button Actions
 - (void)selectOldApp {
-    self.oldAppDir = [self openFileWithSubdirectory:@"sparkle_output" contentType:UTTypeApplicationBundle];
-    if (self.oldAppDir) {
-        [self.oldAppPathField setStringValue:self.oldAppDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose new App: %@", self.oldAppDir]];
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedContentTypes = @[UTTypeApplicationBundle];
+    panel.directoryURL = [NSURL fileURLWithPath:[FileHelper fullPathInDocuments:@"sparkle_output"]];
+    
+    if ([panel runModal] == NSModalResponseOK) {
+        self.oldAppDir = panel.URL.path;
+        self.oldAppPathField.stringValue = self.oldAppDir;
+        [self log:[NSString stringWithFormat:@"Selected App: %@", self.oldAppDir.lastPathComponent] level:LogLevelSuccess];
     }
 }
 
 - (void)selectDeltaFile {
-    self.deltaDir = [self openFileWithSubdirectory:@"sparkle_output" contentType:UTTypeData];
-    if (self.deltaDir) {
-        [self.deltaPathField setStringValue:self.deltaDir];
-        [self logMessage:[NSString stringWithFormat:@"✅ choose Delta file: %@", self.deltaDir]];
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedFileTypes = @[@"delta"];
+    panel.directoryURL = [NSURL fileURLWithPath:[FileHelper fullPathInDocuments:@"sparkle_output"]];
+    
+    if ([panel runModal] == NSModalResponseOK) {
+        self.deltaDir = panel.URL.path;
+        self.deltaPathField.stringValue = self.deltaDir;
+        [self log:[NSString stringWithFormat:@"Selected Delta: %@", self.deltaDir.lastPathComponent] level:LogLevelSuccess];
     }
 }
 
 - (void)okButtonPressed {
-    NSString *NewAppName = self.NewAppNameField.stringValue;
-    if (self.oldAppDir.length == 0 || self.deltaDir.length == 0 || NewAppName.length == 0) {
-        [self logMessage:@"❌ choose App、Delta and new app filename"];
+    // 获取用户输入的新文件名
+    NSString *outputAppName = self.outputAppNameField.stringValue;
+    
+    // 基础校验
+    if (!self.oldAppDir || !self.deltaDir || outputAppName.length == 0) {
+        [AlertPresenter showError:@"Please fill all fields (Old App, Delta, New Name)." inWindow:self.view.window];
         return;
     }
-
-    // 构造 newDir：用 newAppName 替换 oldAppDir 的文件名
-    NSString *oldAppDirPath = self.oldAppDir;
-    NSString *newDir = [[oldAppDirPath stringByDeletingLastPathComponent] stringByAppendingPathComponent:NewAppName];
-
-    // 1. 禁用按钮，防止重复点击
+    
+    // 构造输出路径：在旧 App 同级目录下生成
+    NSString *outputDir = [self.oldAppDir stringByDeletingLastPathComponent];
+    NSString *newAppPath = [outputDir stringByAppendingPathComponent:outputAppName];
+    
     self.okButton.enabled = NO;
-    [self logMessage:@"⏳ Applying delta..."];
-
-    // 2. 使用新的异步接口 (带 completion 参数)
+    [self log:@"⏳ Applying delta... Please wait." level:LogLevelWarning];
+    
+    // 使用 weakSelf 避免 Retain Cycle
+    __weak typeof(self) weakSelf = self;
+    
     [BinaryDeltaManager applyDelta:self.deltaDir
                           toOldDir:self.oldAppDir
-                          toNewDir:newDir
+                          toNewDir:newAppPath
                           logBlock:^(NSString *log) {
-        // 实时日志回调
-        [self logMessage:log];
+        // 确保日志更新在主线程
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf log:log level:LogLevelInfo];
+        });
     } completion:^(BOOL success, NSError *error) {
         
-        // 3. 完成回调 (已在主线程)
-        
-        // 无论成功失败，先恢复按钮
-        self.okButton.enabled = YES;
-        
-        if (success) {
-            [self logMessage:[NSString stringWithFormat:@"✅ updated App generated: %@", newDir]];
-            [UIHelper showSuccessAlertWithTitle:@"✅ Successful!"
-                                        message:@"Success updated App and copy to _outputDir."];
-        } else {
-            NSString *errorMsg = error.localizedDescription ?: @"Unknown error";
-            [self logMessage:[NSString stringWithFormat:@"❌ update New App failed: %@", errorMsg]];
-            [UIHelper showSuccessAlertWithTitle:@"❌ Failed!"
-                                        message:errorMsg];
-        }
+        // 确保 UI 更新在主线程
+        dispatch_async(dispatch_get_main_queue(), ^{
+            weakSelf.okButton.enabled = YES;
+            
+            if (success) {
+                [weakSelf log:[NSString stringWithFormat:@"✅ Success! New App created at: %@", newAppPath] level:LogLevelSuccess];
+                [AlertPresenter showSuccess:@"Delta Applied Successfully!" inWindow:weakSelf.view.window];
+                
+                // 在 Finder 中显示结果
+                [[NSWorkspace sharedWorkspace] selectFile:newAppPath inFileViewerRootedAtPath:@""];
+            } else {
+                [weakSelf log:[NSString stringWithFormat:@"❌ Failed: %@", error.localizedDescription] level:LogLevelError];
+                [AlertPresenter showError:error.localizedDescription inWindow:weakSelf.view.window];
+            }
+        });
     }];
 }
 
-
 - (void)cancelButtonPressed {
-    [self logMessage:@"🚫 Cancel"];
-    self.oldAppPathField.stringValue = @"";
-    self.deltaPathField.stringValue = @"";
-    self.NewAppNameField.stringValue = @"";
-    self.oldAppDir = nil;
-    self.deltaDir = nil;
+    [self.view.window close];
 }
 
-- (NSString *)openFileWithSubdirectory:(NSString *)subDirName contentType:(UTType *)contentType {
-    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *fullPath = [documentsPath stringByAppendingPathComponent:subDirName];
+#pragma mark - Logging System
 
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (![fileManager fileExistsAtPath:fullPath]) {
-        NSError *error = nil;
-        [fileManager createDirectoryAtPath:fullPath withIntermediateDirectories:YES attributes:nil error:&error];
-        if (error) {
-            [self logMessage:[NSString stringWithFormat:@"❌ 创建目录失败: %@", error.localizedDescription]];
-            return nil;
-        }
-    }
-
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.canChooseFiles = YES;
-    panel.canChooseDirectories = NO;
-    panel.allowsMultipleSelection = NO;
-    panel.allowedContentTypes = @[contentType];
-    panel.directoryURL = [NSURL fileURLWithPath:fullPath];
-
-    if ([panel runModal] == NSModalResponseOK) {
-        return panel.URL.path;
-    }
-    return nil;
-}
-
-
-
-#pragma mark - 日志打印
-- (void)logMessage:(NSString *)message {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-        [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
-        NSString *timestamp = [formatter stringFromDate:[NSDate date]];
-        NSString *timestampedMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
-
-        NSString *existingText = self.logTextView.string ?: @"";
-        NSString *updatedText = [existingText stringByAppendingString:timestampedMessage];
-        [self.logTextView setString:updatedText];
-
-        NSRange bottom = NSMakeRange(updatedText.length, 0);
-        [self.logTextView scrollRangeToVisible:bottom];
-
-        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:self.logFileDir];
-        if (!fileHandle) {
-            [[NSFileManager defaultManager] createFileAtPath:self.logFileDir contents:nil attributes:nil];
-            fileHandle = [NSFileHandle fileHandleForWritingAtPath:self.logFileDir];
-        }
-        if (fileHandle) {
-            [fileHandle seekToEndOfFile];
-            [fileHandle writeData:[timestampedMessage dataUsingEncoding:NSUTF8StringEncoding]];
-            [fileHandle closeFile];
+- (void)log:(NSString *)message level:(LogLevel)level {
+    // 1. UI Log (SmartLogView)
+    [self.logView appendLog:message level:level];
+    
+    // 2. File Log (后台写入，防止阻塞 UI)
+    NSString *filePath = self.logFilePath;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+        NSString *ts = [[NSDate date] description];
+        NSString *entry = [NSString stringWithFormat:@"[%@] %@\n", ts, message];
+        
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:filePath];
+        if (fh) {
+            [fh seekToEndOfFile];
+            [fh writeData:[entry dataUsingEncoding:NSUTF8StringEncoding]];
+            [fh closeFile];
         }
     });
 }
-
-
-
 
 @end
